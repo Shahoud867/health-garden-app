@@ -11,6 +11,7 @@
     "npm:@types/node@^22.10.7": "22.20.1",
     "npm:@types/pg@^8.11.10": "8.20.0",
     "npm:deno@^2.1.5": "2.9.4",
+    "npm:dotenv@^16.4.7": "16.6.1",
     "npm:eslint@^9.18.0": "9.39.5",
     "npm:globals@^15.14.0": "15.15.0",
     "npm:husky@^9.1.7": "9.1.7",
@@ -1096,6 +1097,9 @@
       "dependencies": [
         "is-obj"
       ]
+    },
+    "dotenv@16.6.1": {
+      "integrity": "sha512-uBq4egWHTcTt33a72vpSG0z3HnPuIl6NqYcTrKEg2azoEyl2hpW0zqlxysq2pK9HlDIHyHyakeYaYnSAwd8bow=="
     },
     "eciesjs@0.5.0": {
       "integrity": "sha512-s0J9SEVYAEPg7J63GFMApLYzPH9VNIQIyC6s15JpnqVc0TqcKWdbgFlnAweEBRyMmko2dcs2sfC83Hj4J43tuA==",
@@ -2212,6 +2216,7 @@
         "npm:@types/node@^22.10.7",
         "npm:@types/pg@^8.11.10",
         "npm:deno@^2.1.5",
+        "npm:dotenv@^16.4.7",
         "npm:eslint@^9.18.0",
         "npm:globals@^15.14.0",
         "npm:husky@^9.1.7",

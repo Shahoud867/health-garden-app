@@ -7,6 +7,7 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     include: ['supabase/tests/database/**/*.test.ts'],
+    setupFiles: ['supabase/tests/database/setup-env.ts'],
     // These are integration tests against one shared local Postgres instance,
     // not pure unit tests -- running test files sequentially avoids reasoning
     // about cross-file interleaving on tables a global sweep (

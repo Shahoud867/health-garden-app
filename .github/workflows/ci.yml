@@ -89,9 +89,22 @@ jobs:
         run: npx supabase start
 
       # `-o env` is the CLI's documented machine-readable output for exactly
-      # this use case; it appends NAME=value lines consumable by $GITHUB_ENV.
+      # this use case, but it emits shell-quoted KEY="value" pairs meant to be
+      # eval'd/sourced, not appended verbatim to $GITHUB_ENV (which does no
+      # quote-stripping of its own -- a raw append leaves literal quote
+      # characters inside the value, e.g. API_URL becomes the 22-character
+      # string `"http://127.0.0.1:54321"` instead of a valid URL). `eval` lets
+      # the shell do the quote handling correctly, then the values are
+      # re-exported under this suite's own variable names.
       - name: Export local stack credentials
-        run: npx supabase status -o env >> "$GITHUB_ENV"
+        run: |
+          eval "$(npx supabase status -o env)"
+          {
+            echo "SUPABASE_URL=$API_URL"
+            echo "SUPABASE_ANON_KEY=$ANON_KEY"
+            echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY"
+            echo "DATABASE_URL=$DB_URL"
+          } >> "$GITHUB_ENV"
 
       - name: Lint schema
         run: npm run db:lint
