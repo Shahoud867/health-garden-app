@@ -176,9 +176,17 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
--- Runs as whatever role performed the log write (SECURITY INVOKER, the
--- default) — it needs no elevated privilege of its own; sync_garden_state
--- carries the privilege needed to actually write garden_state.
+-- SECURITY DEFINER, not the SECURITY INVOKER default: EXECUTE privilege on
+-- sync_garden_state is checked against whoever is actually calling it, not
+-- against whatever elevation sync_garden_state's own body carries. A plain
+-- SECURITY INVOKER trigger function here would run as the authenticated
+-- user who performed the log write -- exactly the role the privilege
+-- lockdown below revokes EXECUTE on sync_garden_state from -- so every log
+-- insert would fail with "permission denied for function sync_garden_state"
+-- and roll back the entire statement. Marking this SECURITY DEFINER costs
+-- nothing in exposed surface: it is a trigger function (returns TRIGGER),
+-- which Postgres already refuses to call outside trigger context regardless
+-- of any grant, so this cannot be reached as a client-facing RPC either way.
 CREATE OR REPLACE FUNCTION on_log_change() RETURNS TRIGGER AS $$
 BEGIN
   IF TG_OP = 'DELETE' THEN
@@ -189,7 +197,7 @@ BEGIN
     RETURN NEW;
   END IF;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 -- AFTER INSERT OR UPDATE OR DELETE (extended from the blueprint's
 -- AFTER-INSERT-only sketch in §5.3): compute_days_succeeded/
