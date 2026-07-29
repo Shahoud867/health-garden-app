@@ -18,23 +18,30 @@ track gated behind real-user retention data, not a launch requirement.
 
 ## Status
 
-| Phase                                    | Scope                                                          | State       |
-| ---------------------------------------- | -------------------------------------------------------------- | ----------- |
-| **1 — Project Foundation**               | Repo, tooling, git hooks, CI skeleton, docs                    | ✅ Complete |
-| **2 — Core Infrastructure**              | Edge Function kernel (42 tests), `/health` endpoint            | ✅ Complete |
-| **3 — Database Layer**                   | Schema (22 tables), RLS, garden engine, seed data              | ✅ Complete |
-| 4 — Auth & Security                      | Supabase Auth wiring, session cookies, headers, bot protection | ⏳ Next     |
-| 5 — Core Business Logic                  | `ai-chat`, `ai-plan-generate`, `payments-*` Edge Functions     | ⏳ Planned  |
-| 6 — Background Processing                | `pg_cron` jobs (garden reset, watchdogs, reconciliation)       | ⏳ Planned  |
-| 7 — External Integrations                | Gemini (via provider abstraction), Web Push, payment providers | ⏳ Planned  |
-| 8 — Production Readiness                 | Monitoring, CI/CD hardening, deployment                        | ⏳ Planned  |
-| _(then, frontend)_ Next.js web client    | Only begins once the backend above is complete                 | ⏳ Planned  |
-| _(conditional)_ React Native mobile port | Only if the retention gate (Blueprint §13.6) clears            | Gated       |
+| Phase                                     | Scope                                                           | State       |
+| ----------------------------------------- | --------------------------------------------------------------- | ----------- |
+| **1 — Project Foundation**                | Repo, tooling, git hooks, CI skeleton, docs                     | ✅ Complete |
+| **2 — Core Infrastructure**               | Edge Function kernel (42 tests), `/health` endpoint             | ✅ Complete |
+| **3 — Database Layer**                    | Schema (22 tables), RLS, garden engine, seed data               | ✅ Complete |
+| **4 — Auth & Security (backend portion)** | Auth config hardening, account export/delete, Turnstile utility | ✅ Complete |
+| 5 — Core Business Logic                   | `ai-chat`, `ai-plan-generate`, `payments-*` Edge Functions      | ⏳ Next     |
+| 6 — Background Processing                 | `pg_cron` jobs (garden reset, watchdogs, reconciliation)        | ⏳ Planned  |
+| 7 — External Integrations                 | Gemini (via provider abstraction), Web Push, payment providers  | ⏳ Planned  |
+| 8 — Production Readiness                  | Monitoring, CI/CD hardening, deployment                         | ⏳ Planned  |
+| _(then, frontend)_ Next.js web client     | Only begins once the backend above is complete                  | ⏳ Planned  |
+| _(conditional)_ React Native mobile port  | Only if the retention gate (Blueprint §13.6) clears             | Gated       |
 
 This phase breakdown is a **client-agnostic backend-first sequencing** agreed for this
 implementation round — it maps onto the blueprint's own phases (§13.2) but is ordered so every
 layer is independently verifiable before the next one depends on it. See
 [`CONTRIBUTING.md`](CONTRIBUTING.md) for the full mapping rationale.
+
+**Phase 4 is a split, not a full "Auth & Security."** Session cookies (ADR-020), the security-headers
+middleware (§7.11), and CSRF/XSS mitigations (§7.6) are Next.js middleware by definition (the
+blueprint says so explicitly) — there is no way to build them before the web client exists without
+jumping ahead of backend-first. What's genuinely backend — Turnstile's server-side verification
+call, account export/deletion (§7.9), and Supabase Auth's own rate-limit/password-policy config —
+is built now; the rest is deferred to the web client phase, tracked there, not silently dropped.
 
 ---
 
@@ -135,11 +142,14 @@ supabase/
       http/                  Error taxonomy, response envelope, CORS, endpoint factory
       auth/                  JWT resolution and RLS-scoped client construction
       validation/            Shared zod schemas mirroring database constraints
+      security/              Turnstile verification (§7.12) — not wired in until Phase 5
       deps.ts                Single point of external dependency control
       version.ts             API contract versioning (§6.1)
     health/                Reference endpoint — liveness probe (§6.2, §10.2)
       handler.ts             Logic, importable by tests
       index.ts               Runtime entrypoint; contains nothing else
+    account-export/        Right-to-access data export (§7.9)
+    account-delete/         Right-to-erasure account deletion (§7.9)
 docs/adr/                 Architecture Decision Records
 .github/workflows/        CI pipeline
 ```

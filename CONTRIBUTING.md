@@ -21,18 +21,18 @@ The blueprint's own roadmap (§13.2) sequences work by _product milestone_ (vali
 build → launch → scale). This repository's day-to-day implementation order instead sequences by
 _architectural layer_, so each layer is independently testable before the next depends on it:
 
-| This repo's phase           | Blueprint concept it implements                                                        |
-| --------------------------- | -------------------------------------------------------------------------------------- |
-| 1. Project Foundation       | Tooling/process prerequisites implied throughout §9, §13.4                             |
-| 2. Core Infrastructure      | The Edge Function kernel pattern (§2, §6), `/health` (§6.2, §10.2)                     |
-| 3. Database Layer           | §5 in full — schema, RLS, the garden engine (ADR-002), seed data                       |
-| 4. Auth & Security          | §7 — Supabase Auth, session cookies (ADR-020), headers (§7.11), bot protection (§7.12) |
-| 5. Core Business Logic      | §6.2/§6.6 — `ai-chat`, `ai-plan-generate`, `payments-*` Edge Functions                 |
-| 6. Background Processing    | §4.6 — `pg_cron` jobs                                                                  |
-| 7. External Integrations    | §2.10/§2.11/§6.6 — Gemini, Web Push, payment providers                                 |
-| 8. Production Readiness     | §9–§10 — monitoring, CI/CD, deployment                                                 |
-| _(then)_ Web client         | §3.1a — Next.js PWA, built only once the backend above is stable                       |
-| _(conditional)_ Mobile port | §11.12 — only if the retention gate (§13.6) clears                                     |
+| This repo's phase                    | Blueprint concept it implements                                                                                                                                                                   |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Project Foundation                | Tooling/process prerequisites implied throughout §9, §13.4                                                                                                                                        |
+| 2. Core Infrastructure               | The Edge Function kernel pattern (§2, §6), `/health` (§6.2, §10.2)                                                                                                                                |
+| 3. Database Layer                    | §5 in full — schema, RLS, the garden engine (ADR-002), seed data                                                                                                                                  |
+| 4. Auth & Security (backend portion) | §7.9/§7.12's backend halves — account export/deletion, Turnstile verification, Auth rate-limit/password config                                                                                    |
+| 5. Core Business Logic               | §6.2/§6.6 — `ai-chat`, `ai-plan-generate`, `payments-*` Edge Functions                                                                                                                            |
+| 6. Background Processing             | §4.6 — `pg_cron` jobs                                                                                                                                                                             |
+| 7. External Integrations             | §2.10/§2.11/§6.6 — Gemini, Web Push, payment providers                                                                                                                                            |
+| 8. Production Readiness              | §9–§10 — monitoring, CI/CD, deployment                                                                                                                                                            |
+| _(then)_ Web client                  | §3.1a — Next.js PWA; also where ADR-020 (session cookies), §7.11 (security headers), and §7.6's CSRF/XSS mitigations land, since all three are Next.js middleware by definition, not backend work |
+| _(conditional)_ Mobile port          | §11.12 — only if the retention gate (§13.6) clears                                                                                                                                                |
 
 Three things this repository deliberately does **not** have, because the blueprint's own ADRs rule
 them out rather than merely omitting them — do not reintroduce them without first amending the
