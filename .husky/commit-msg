@@ -1,0 +1,11 @@
+# Conventional Commits enforcement (Blueprint §13.4)
+#
+# A greppable history is disproportionately valuable for a two-person team where
+# losing shared context is the real long-term risk (Blueprint §14.2).
+#
+# Format: <type>(<scope>): <subject>
+# Example: feat(garden): derive weekly counts from source logs
+#
+# Allowed scopes are listed in commitlint.config.js.
+
+npx --no-install commitlint --edit "$1"

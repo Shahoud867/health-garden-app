@@ -1,0 +1,23 @@
+# Pre-commit gate (Blueprint §7.5, §13.4)
+#
+# Ordering is intentional: the secret scan runs FIRST. Once a secret reaches a
+# commit it is in the repository's history even if a later commit removes it, so
+# this is the only point where prevention is still cheap.
+
+if command -v gitleaks >/dev/null 2>&1; then
+  echo "→ gitleaks: scanning staged changes"
+  gitleaks protect --staged --redact --verbose || {
+    echo ""
+    echo "✖ A potential secret was found in your staged changes."
+    echo "  Remove it and re-stage. If this is a false positive, add a narrowly"
+    echo "  scoped rule to .gitleaks.toml — never bypass with --no-verify."
+    exit 1
+  }
+else
+  echo "⚠ gitleaks not installed — local secret scan skipped."
+  echo "  CI runs the authoritative full-history scan, but installing it locally"
+  echo "  catches leaks before they enter history: https://github.com/gitleaks/gitleaks"
+fi
+
+echo "→ lint-staged: formatting and linting staged files"
+npx lint-staged

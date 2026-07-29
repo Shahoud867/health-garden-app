@@ -1,0 +1,68 @@
+# Continuous Integration (Blueprint §9.2, ADR-012)
+#
+# Job design follows one rule: fail fast on cheap checks, and never let an
+# expensive job mask a trivial failure.
+#
+# Phase 1 scope: only the `quality` (Node-side tooling) and `secrets` jobs are
+# meaningful right now — there is no Deno source under supabase/functions/ and
+# no SQL under supabase/migrations/ yet. Running `deno lint`/`deno check` or
+# `supabase db reset` against an empty project would either error on an empty
+# glob or pass vacuously, which is a false signal, not a real gate. Those steps
+# are added to this file in Phase 2 (Deno lint/typecheck/test) and Phase 3
+# (the `database` job) as soon as there is something real for them to check.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# A new push to the same branch supersedes an in-flight run — GitHub Actions
+# free minutes are a budgeted resource (Blueprint Appendix C).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: Format and lint (Node-side tooling)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install tooling
+        run: npm ci --no-audit --no-fund
+
+      - name: Check formatting
+        run: npx prettier --check .
+
+      - name: Lint
+        run: npx eslint .
+
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history: the pre-commit hook covers staged changes, but only a
+          # complete scan catches a secret committed before the hook existed or
+          # pushed with --no-verify (Blueprint §7.5).
+          fetch-depth: 0
+
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

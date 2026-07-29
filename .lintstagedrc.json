@@ -1,0 +1,5 @@
+{
+  "supabase/functions/**/*.ts": ["deno fmt", "deno lint"],
+  "*.{js,mjs,cjs}": ["eslint --fix", "prettier --write"],
+  "*.{json,md,yml,yaml}": ["prettier --write"]
+}

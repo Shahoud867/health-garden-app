@@ -1,0 +1,40 @@
+# Architecture Decision Records
+
+ADR-001 through ADR-022 are recorded in Appendix A of
+[`Health-Garden-System-Architecture-Blueprint.md`](../../../Health-Garden-System-Architecture-Blueprint.md)
+(v2.3) and are the architectural baseline for this repository. They are summarised below for
+reference; the blueprint remains authoritative. Numbers 017–018 are intentionally unused by the
+blueprint — implementation-level ADRs (decisions made during coding that the blueprint sets
+direction for but doesn't dictate precisely) are recorded as individual files in this directory
+starting at **ADR-0023**, so there is never a numbering collision between the two.
+
+## Baseline (Blueprint Appendix A)
+
+| ADR | Decision                                                                               |
+| --- | -------------------------------------------------------------------------------------- |
+| 001 | BaaS-first architecture on Supabase                                                    |
+| 002 | Garden state as a derived aggregate, never an incremented counter                      |
+| 003 | AI limited to server-side Gemini calls behind a hard pre-call quota gate               |
+| 004 | Offline-first persistence with idempotent sync via client-generated UUIDs              |
+| 005 | `expo-secure-store` for auth tokens — mobile (Track B), reinstated if/when it ships    |
+| 006 | Row Level Security as the sole authorization mechanism                                 |
+| 007 | No traditional ORM; Supabase-generated TypeScript types                                |
+| 008 | Interim manual payment verification bridging the SECP/merchant-account gap             |
+| 009 | Weight-trend tracking reinstated as committed MVP scope                                |
+| 010 | Config-driven feature flags and thresholds (`app_config`)                              |
+| 011 | No Docker/Kubernetes in production; self-hosted Supabase reserved as the exit path     |
+| 012 | Supabase CLI migrations as Infrastructure as Code                                      |
+| 013 | Sentry + PostHog + UptimeRobot + Retool as the free observability/admin stack          |
+| 014 | `pgvector` reserved as the AI-personalisation seed, not adopted at MVP                 |
+| 015 | `expo-updates` OTA channel — mobile (Track B), reinstated if/when it ships             |
+| 016 | Condition-specific programs (diabetes, PCOS, joint pain) designed now, activated later |
+| 019 | Web-first launch; React Native mobile port gated behind production retention data      |
+| 020 | httpOnly-cookie session storage via `@supabase/ssr` for the web client                 |
+| 021 | Authenticated routes always dynamically rendered, `Cache-Control: private, no-store`   |
+| 022 | AI provider abstraction with prompt-injection hardening as a first-class concern       |
+
+## Implementation decisions
+
+Recorded as this repository is built. None yet — Phase 1 is tooling and process configuration
+only; the first implementation-level decision (the Edge Function kernel's shape) is recorded as
+ADR-0023 in Phase 2.

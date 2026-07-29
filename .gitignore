@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+
+# Environment & secrets — NEVER commit these (Blueprint §7.4, §9.4)
+.env
+.env.*
+!.env.example
+supabase/functions/.env.local
+supabase/.env
+
+# Supabase local stack artifacts
+supabase/.branches/
+supabase/.temp/
+supabase/logs/
+
+# Generated types (regenerate via `npm run types:generate`)
+# Committed intentionally so CI typechecks without a live DB — see docs/adr/0023+.
+# supabase/functions/_shared/database.types.ts
+
+# Test & coverage output
+.coverage/
+coverage/
+*.lcov
+
+# Web build output (Phase 5+, Next.js)
+.next/
+out/
+dist/
+build/
+
+# Editor
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+
+# Logs
+*.log
+npm-debug.log*

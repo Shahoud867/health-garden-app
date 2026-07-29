@@ -1,0 +1,31 @@
+# Secret-scanning configuration (Blueprint §7.5)
+#
+# Extends the upstream default ruleset rather than replacing it, so new detector
+# rules arrive automatically with gitleaks upgrades.
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "supabase-service-role-key"
+description = "Supabase service_role JWT — bypasses every RLS policy (Blueprint §7.4)"
+regex = '''eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}'''
+keywords = ["service_role", "eyJ"]
+
+[[rules]]
+id = "google-gemini-api-key"
+description = "Google API key — an exposed key drains the project-wide free quota (Blueprint ADR-003)"
+regex = '''AIza[0-9A-Za-z\-_]{35}'''
+keywords = ["AIza"]
+
+[allowlist]
+description = "Paths that legitimately contain key-shaped placeholder text"
+paths = [
+  '''\.env\.example$''',
+  '''package-lock\.json$''',
+  '''docs/.*\.md$''',
+]
+regexes = [
+  '''replace-with-local-.*''',
+  '''test-(anon|service-role)-key''',
+]

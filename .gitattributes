@@ -1,0 +1,32 @@
+# Normalise line endings across platforms.
+#
+# Not cosmetic: development happens on Windows while CI runs on Linux. A shell
+# hook or SQL migration checked out with CRLF fails on Linux with an error that
+# does not name line endings as the cause, which is an expensive thing to debug.
+
+* text=auto eol=lf
+
+*.sh          text eol=lf
+*.ts          text eol=lf
+*.tsx         text eol=lf
+*.js          text eol=lf
+*.json        text eol=lf
+*.sql         text eol=lf
+*.toml        text eol=lf
+*.yml         text eol=lf
+*.yaml        text eol=lf
+*.md          text eol=lf
+.husky/*      text eol=lf
+
+# Lockfiles are generated — collapse them in diffs and reviews.
+package-lock.json  linguist-generated=true -diff
+deno.lock          linguist-generated=true -diff
+
+# Generated database types (ADR-007).
+supabase/functions/_shared/database.types.ts linguist-generated=true -diff
+
+# Binary assets.
+*.png binary
+*.jpg binary
+*.pdf binary
+*.ttf binary

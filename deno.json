@@ -1,0 +1,45 @@
+{
+  "$schema": "https://deno.land/x/deno/cli/schemas/config-file.v1.json",
+  "//": "nodeModulesDir=auto lets Deno resolve its own npm: specifiers independently of the Node tooling install in node_modules. Without it, Deno assumes the Node package manager owns resolution and fails on npm: imports that are intentionally absent from package.json — those are Edge Function runtime deps, not Node tooling deps.",
+  "nodeModulesDir": "auto",
+  "compilerOptions": {
+    "strict": true,
+    "noImplicitOverride": true,
+    "noUncheckedIndexedAccess": true,
+    "noFallthroughCasesInSwitch": true,
+    "exactOptionalPropertyTypes": false,
+    "lib": ["deno.window", "deno.ns", "esnext"]
+  },
+  "lint": {
+    "include": ["supabase/functions/"],
+    "exclude": ["supabase/functions/_shared/database.types.ts"],
+    "rules": {
+      "tags": ["recommended"],
+      "include": [
+        "explicit-function-return-type",
+        "no-await-in-loop",
+        "no-console",
+        "no-throw-literal",
+        "eqeqeq"
+      ]
+    }
+  },
+  "fmt": {
+    "include": ["supabase/functions/"],
+    "exclude": ["supabase/functions/_shared/database.types.ts"],
+    "lineWidth": 100,
+    "indentWidth": 2,
+    "semiColons": true,
+    "singleQuote": true,
+    "proseWrap": "preserve"
+  },
+  "test": {
+    "include": ["supabase/functions/"]
+  },
+  "imports": {
+    "@std/assert": "jsr:@std/assert@^1.0.10",
+    "@std/testing/": "jsr:@std/testing@^1.0.8/",
+    "@supabase/supabase-js": "npm:@supabase/supabase-js@^2.47.10",
+    "zod": "npm:zod@^3.24.1"
+  }
+}

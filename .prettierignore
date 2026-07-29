@@ -1,0 +1,14 @@
+node_modules/
+.coverage/
+.next/
+out/
+dist/
+build/
+
+# Deno owns formatting for Edge Functions (`deno fmt`) — avoid two formatters
+# fighting over the same files.
+supabase/functions/
+
+# Generated artifacts
+supabase/functions/_shared/database.types.ts
+package-lock.json

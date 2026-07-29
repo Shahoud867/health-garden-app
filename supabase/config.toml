@@ -1,0 +1,92 @@
+# =============================================================================
+# Health Garden — Local Supabase Stack (Blueprint §9.1, ADR-011, ADR-012)
+# =============================================================================
+# `supabase start` launches this as a Docker Compose stack. This is the ONLY
+# place Docker appears in the project: production is managed Supabase, never
+# self-operated containers (ADR-011).
+#
+# This file is version-controlled and IS the Infrastructure-as-Code definition
+# of the local environment (ADR-012). Auth/CAPTCHA (Turnstile, §7.12) and
+# security-header concerns are configured in later phases (Auth & Security,
+# and the Next.js middleware respectively) — this file governs the platform
+# stack only, not the client.
+# =============================================================================
+
+project_id = "health-garden"
+
+[api]
+enabled = true
+port = 54321
+# `public` is the application schema. `graphql_public` stays disabled until an
+# actual GraphQL consumer exists (Blueprint §3.2 — pg_graphql dormant).
+schemas = ["public"]
+extra_search_path = ["public", "extensions"]
+# Hard ceiling on rows returned by any single PostgREST request. Protects
+# against accidental full-table scans from a buggy or malicious client.
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 17
+
+[db.pooler]
+enabled = false
+
+[studio]
+enabled = true
+port = 54323
+
+# Local mail catcher — verifies the password-reset flow (Blueprint §7.2, G-7)
+# without sending real email during development.
+[inbucket]
+enabled = true
+port = 54324
+
+[storage]
+enabled = true
+file_size_limit = "5MiB"
+
+[auth]
+enabled = true
+site_url = "http://127.0.0.1:3000"
+additional_redirect_urls = ["http://127.0.0.1:3000/auth/callback"]
+jwt_expiry = 3600
+enable_refresh_token_rotation = true
+refresh_token_reuse_interval = 10
+enable_signup = true
+enable_anonymous_sign_ins = false
+
+[auth.email]
+enable_signup = true
+enable_confirmations = false      # local convenience only; enabled in staging/production
+double_confirm_changes = true
+secure_password_change = true
+
+[auth.email.template.recovery]
+subject = "Reset your Health Garden password"
+
+# Phone/SMS OTP deliberately disabled: SMS carries a real per-message cost,
+# deferred until premium revenue funds it (Blueprint §3.5, "cost follows revenue").
+[auth.sms]
+enable_signup = false
+enable_confirmations = false
+
+[edge_runtime]
+enabled = true
+policy = "oneshot"               # fresh isolate per request locally; easier debugging
+inspector_port = 8083
+
+# -----------------------------------------------------------------------------
+# Per-function JWT gate (Blueprint §4.5 — layer 1 of redundant authorization).
+# `verify_jwt = true` rejects unauthenticated requests at the platform gateway
+# BEFORE the function isolate boots — cheaper and stricter than an in-function
+# check alone. The in-function auth resolver (Phase 2) remains as layer 2.
+# -----------------------------------------------------------------------------
+
+# Public liveness probe for UptimeRobot (Blueprint §6.2, §10.2) — no auth.
+[functions.health]
+verify_jwt = false
+
+[analytics]
+enabled = false                   # Sentry + PostHog own observability (ADR-013)
