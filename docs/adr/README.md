@@ -35,6 +35,6 @@ starting at **ADR-0023**, so there is never a numbering collision between the tw
 
 ## Implementation decisions
 
-Recorded as this repository is built. None yet — Phase 1 is tooling and process configuration
-only; the first implementation-level decision (the Edge Function kernel's shape) is recorded as
-ADR-0023 in Phase 2.
+| ADR                                              | Decision                                                   |
+| ------------------------------------------------ | ---------------------------------------------------------- |
+| [0023](0023-declarative-edge-function-kernel.md) | A declarative endpoint factory as the Edge Function kernel |

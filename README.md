@@ -21,8 +21,8 @@ track gated behind real-user retention data, not a launch requirement.
 | Phase                                    | Scope                                                          | State       |
 | ---------------------------------------- | -------------------------------------------------------------- | ----------- |
 | **1 — Project Foundation**               | Repo, tooling, git hooks, CI skeleton, docs                    | ✅ Complete |
-| 2 — Core Infrastructure                  | Edge Function kernel, `/health` endpoint                       | ⏳ Next     |
-| 3 — Database Layer                       | Schema, RLS, garden engine, seed data                          | ⏳ Planned  |
+| **2 — Core Infrastructure**              | Edge Function kernel (42 tests), `/health` endpoint            | ✅ Complete |
+| 3 — Database Layer                       | Schema, RLS, garden engine, seed data                          | ⏳ Next     |
 | 4 — Auth & Security                      | Supabase Auth wiring, session cookies, headers, bot protection | ⏳ Planned  |
 | 5 — Core Business Logic                  | `ai-chat`, `ai-plan-generate`, `payments-*` Edge Functions     | ⏳ Planned  |
 | 6 — Background Processing                | `pg_cron` jobs (garden reset, watchdogs, reconciliation)       | ⏳ Planned  |
@@ -82,16 +82,16 @@ npm ci
 cp .env.example .env
 ```
 
-Start the local stack once Phase 2+ adds something to run against it:
+Run the kernel's test suite (no Supabase stack needed yet — Phase 2 has no database dependency):
+
+```bash
+npm run verify
+```
+
+Start the local stack once Phase 3 adds a schema to run against it:
 
 ```bash
 npm run db:start
-```
-
-Verify tooling now (Phase 1 has no application code yet, so this checks formatting/lint only):
-
-```bash
-npx prettier --check . && npx eslint .
 ```
 
 ---
@@ -108,6 +108,66 @@ npx prettier --check . && npx eslint .
 | `npm run test:db`                            | Run pgTAP tests under `supabase/tests/database/`                                |
 | `npm run types:generate`                     | Regenerate TypeScript types from the live schema (ADR-007)                      |
 | `npm run functions:serve`                    | Serve Edge Functions locally                                                    |
+| `npm test` / `test:watch` / `test:coverage`  | Edge Function unit tests (Deno test runner)                                     |
+| `npm run typecheck`                          | `deno check` across all Edge Function sources                                   |
+
+---
+
+## Repository layout
+
+```
+supabase/
+  config.toml            Local stack definition — infrastructure as code (ADR-012)
+  functions/
+    _shared/              The kernel — every function composes from here
+      config/env.ts         Validated configuration, fails fast at cold start
+      observability/        Structured logging with PII redaction (§7.9)
+      http/                  Error taxonomy, response envelope, CORS, endpoint factory
+      auth/                  JWT resolution and RLS-scoped client construction
+      validation/            Shared zod schemas mirroring database constraints
+      deps.ts                Single point of external dependency control
+      version.ts             API contract versioning (§6.1)
+    health/                Reference endpoint — liveness probe (§6.2, §10.2)
+      handler.ts             Logic, importable by tests
+      index.ts               Runtime entrypoint; contains nothing else
+docs/adr/                 Architecture Decision Records
+.github/workflows/        CI pipeline
+```
+
+### Writing a new Edge Function
+
+Every function follows the same two-file split, so handlers stay testable without binding a port:
+
+```ts
+// supabase/functions/<name>/handler.ts
+import { defineEndpoint } from '../_shared/http/endpoint.ts';
+import { z } from '../_shared/deps.ts';
+
+export const handleThing = defineEndpoint({
+  name: 'thing',
+  methods: ['POST'],
+  auth: 'required',
+  bodySchema: z.object({ value: z.string().min(1) }),
+  handler: async (ctx) => {
+    // ctx.auth.db is scoped to the caller — RLS applies to every query.
+    return { ok: true };
+  },
+});
+```
+
+```ts
+// supabase/functions/<name>/index.ts
+import { handleThing } from './handler.ts';
+Deno.serve(handleThing);
+```
+
+The kernel supplies correlation ids, structured logging, the `{ error, message }` envelope,
+validation, CORS, method gating, auth resolution, and `Cache-Control: private, no-store` on every
+response. A handler that builds a bare `Response` or throws an untyped error bypasses those
+guarantees and should be treated as a defect.
+
+Register the function's JWT policy in `supabase/config.toml` — omit it and it defaults to
+requiring a JWT, which is the safe direction to fail.
 
 ---
 
@@ -117,10 +177,11 @@ npx prettier --check . && npx eslint .
   layer a modified client cannot defeat.
 - Secrets live in Supabase Edge Function secrets and GitHub Actions secrets. Never in code, never
   in a committed file. `gitleaks` runs pre-commit and over full history in CI.
-- Every authenticated route (once the web client exists) is dynamically rendered with
-  `Cache-Control: private, no-store` — never statically cached (ADR-021). This is the single most
-  severe hazard the web-first architecture introduces; see the blueprint §4.11 before touching
-  rendering configuration.
+- Every Edge Function response defaults to `Cache-Control: private, no-store` (see
+  `_shared/http/response.ts`) — half of the rendering/caching-safety rule (ADR-021); the other
+  half is enforced in the Next.js route-rendering config once the web client exists. This is the
+  single most severe hazard the web-first architecture introduces; see the blueprint §4.11 before
+  touching either half.
 
 ---
 

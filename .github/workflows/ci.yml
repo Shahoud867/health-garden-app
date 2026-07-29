@@ -3,13 +3,11 @@
 # Job design follows one rule: fail fast on cheap checks, and never let an
 # expensive job mask a trivial failure.
 #
-# Phase 1 scope: only the `quality` (Node-side tooling) and `secrets` jobs are
-# meaningful right now — there is no Deno source under supabase/functions/ and
-# no SQL under supabase/migrations/ yet. Running `deno lint`/`deno check` or
-# `supabase db reset` against an empty project would either error on an empty
-# glob or pass vacuously, which is a false signal, not a real gate. Those steps
-# are added to this file in Phase 2 (Deno lint/typecheck/test) and Phase 3
-# (the `database` job) as soon as there is something real for them to check.
+# Phase 2 adds Deno lint/typecheck/test to the `quality` job now that real
+# source exists under supabase/functions/ — running them against an empty
+# glob (Phase 1) would have errored or passed vacuously, neither of which is
+# a real gate. The `database` job (Supabase migrations, pgTAP) is deferred to
+# Phase 3, the same way, once supabase/migrations/ has real SQL in it.
 
 name: CI
 
@@ -30,7 +28,7 @@ permissions:
 
 jobs:
   quality:
-    name: Format and lint (Node-side tooling)
+    name: Format, lint, typecheck, test
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -41,14 +39,26 @@ jobs:
           node-version: 22
           cache: npm
 
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
       - name: Install tooling
         run: npm ci --no-audit --no-fund
 
       - name: Check formatting
-        run: npx prettier --check .
+        run: deno fmt --check supabase/functions/ && npx prettier --check .
 
       - name: Lint
-        run: npx eslint .
+        run: deno lint supabase/functions/ && npx eslint .
+
+      # Type checking is a separate step from tests so a type regression is
+      # reported as such, rather than surfacing as an opaque test failure.
+      - name: Typecheck
+        run: deno check supabase/functions/**/*.ts
+
+      - name: Unit tests
+        run: deno test --allow-env --allow-read --no-check=remote supabase/functions/
 
   secrets:
     name: Secret scan
