@@ -6,8 +6,15 @@
 # Phase 2 adds Deno lint/typecheck/test to the `quality` job now that real
 # source exists under supabase/functions/ — running them against an empty
 # glob (Phase 1) would have errored or passed vacuously, neither of which is
-# a real gate. The `database` job (Supabase migrations, pgTAP) is deferred to
-# Phase 3, the same way, once supabase/migrations/ has real SQL in it.
+# a real gate.
+#
+# Phase 3 adds the `database` job: starts the local Supabase stack (the only
+# place this project runs Docker — ADR-011), applies every migration and
+# supabase/seed.sql from a clean database, then runs the Vitest database
+# suite against it (Blueprint §13.5 specifies Vitest, not pgTAP, for the
+# garden derivation functions). It also adds `tsc --noEmit` to the `quality`
+# job's Typecheck step, since that suite is the first Node-side (not Deno)
+# TypeScript in the repo.
 
 name: CI
 
@@ -55,10 +62,46 @@ jobs:
       # Type checking is a separate step from tests so a type regression is
       # reported as such, rather than surfacing as an opaque test failure.
       - name: Typecheck
-        run: deno check supabase/functions/**/*.ts
+        run: deno check supabase/functions/**/*.ts && npx tsc --noEmit
 
       - name: Unit tests
         run: deno test --allow-env --allow-read --no-check=remote supabase/functions/
+
+  database:
+    name: Database schema, RLS, garden engine
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install tooling
+        run: npm ci --no-audit --no-fund
+
+      # ubuntu-latest ships Docker preinstalled and running — the one
+      # environment where this project's only Docker usage (ADR-011) needs
+      # no extra setup.
+      - name: Start local Supabase stack
+        run: npx supabase start
+
+      # `-o env` is the CLI's documented machine-readable output for exactly
+      # this use case; it appends NAME=value lines consumable by $GITHUB_ENV.
+      - name: Export local stack credentials
+        run: npx supabase status -o env >> "$GITHUB_ENV"
+
+      - name: Lint schema
+        run: npm run db:lint
+
+      - name: Run database test suite
+        run: npm run test:db
+
+      - name: Stop local Supabase stack
+        if: always()
+        run: npx supabase stop
 
   secrets:
     name: Secret scan

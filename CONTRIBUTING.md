@@ -127,6 +127,10 @@ Do not record routine choices any reasonable engineer would make the same way.
    that trigger is a product guarantee, not a technical detail.
 6. **Never** allow an authenticated route to be statically generated or cached at a shared layer
    (ADR-021). This is how one user's private data gets served to another user.
+7. **Never** add a client-facing `INSERT`/`UPDATE`/`DELETE` policy to a derived/protected value
+   (`garden_state`, `permanent_garden`, `subscriptions`, `users.is_premium`, AI usage/plans, ADR-0024)
+   — even scoped to the owning user's own row. A write to one of these goes through a new or
+   existing `SECURITY DEFINER` function, never a relaxed RLS policy.
 
 ---
 

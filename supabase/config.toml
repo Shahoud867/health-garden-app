@@ -38,8 +38,9 @@ enabled = true
 port = 54323
 
 # Local mail catcher — verifies the password-reset flow (Blueprint §7.2, G-7)
-# without sending real email during development.
-[inbucket]
+# without sending real email during development. `[local_smtp]` renamed from
+# `[inbucket]` (the underlying tool's old name) in newer Supabase CLI releases.
+[local_smtp]
 enabled = true
 port = 54324
 

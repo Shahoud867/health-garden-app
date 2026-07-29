@@ -22,8 +22,8 @@ track gated behind real-user retention data, not a launch requirement.
 | ---------------------------------------- | -------------------------------------------------------------- | ----------- |
 | **1 — Project Foundation**               | Repo, tooling, git hooks, CI skeleton, docs                    | ✅ Complete |
 | **2 — Core Infrastructure**              | Edge Function kernel (42 tests), `/health` endpoint            | ✅ Complete |
-| 3 — Database Layer                       | Schema, RLS, garden engine, seed data                          | ⏳ Next     |
-| 4 — Auth & Security                      | Supabase Auth wiring, session cookies, headers, bot protection | ⏳ Planned  |
+| **3 — Database Layer**                   | Schema (22 tables), RLS, garden engine, seed data              | ✅ Complete |
+| 4 — Auth & Security                      | Supabase Auth wiring, session cookies, headers, bot protection | ⏳ Next     |
 | 5 — Core Business Logic                  | `ai-chat`, `ai-plan-generate`, `payments-*` Edge Functions     | ⏳ Planned  |
 | 6 — Background Processing                | `pg_cron` jobs (garden reset, watchdogs, reconciliation)       | ⏳ Planned  |
 | 7 — External Integrations                | Gemini (via provider abstraction), Web Push, payment providers | ⏳ Planned  |
@@ -82,16 +82,22 @@ npm ci
 cp .env.example .env
 ```
 
-Run the kernel's test suite (no Supabase stack needed yet — Phase 2 has no database dependency):
+Run the kernel's test suite (no Supabase stack needed for this one):
 
 ```bash
 npm run verify
 ```
 
-Start the local stack once Phase 3 adds a schema to run against it:
+Start the local stack — needed for the database test suite, and for anything touching a table:
 
 ```bash
 npm run db:start
+```
+
+Populate `.env` with the values `supabase status` just printed, then run the database suite:
+
+```bash
+npm run test:db
 ```
 
 ---
@@ -104,12 +110,13 @@ npm run db:start
 | `npm run lint` / `lint:fix`                  | Lint (ESLint for tooling, `deno lint` for functions once they exist)            |
 | `npm run verify`                             | Full gate: format check, lint, typecheck, test — meaningful from Phase 2 onward |
 | `npm run db:start` / `db:stop` / `db:status` | Local Supabase stack lifecycle                                                  |
-| `npm run db:reset`                           | Rebuild the local database from migrations                                      |
-| `npm run test:db`                            | Run pgTAP tests under `supabase/tests/database/`                                |
+| `npm run db:reset`                           | Rebuild the local database from migrations + `seed.sql`                         |
+| `npm run db:lint`                            | Lint the schema itself (`supabase db lint`)                                     |
+| `npm run test:db`                            | Vitest suite under `supabase/tests/database/` — needs the local stack running   |
 | `npm run types:generate`                     | Regenerate TypeScript types from the live schema (ADR-007)                      |
 | `npm run functions:serve`                    | Serve Edge Functions locally                                                    |
 | `npm test` / `test:watch` / `test:coverage`  | Edge Function unit tests (Deno test runner)                                     |
-| `npm run typecheck`                          | `deno check` across all Edge Function sources                                   |
+| `npm run typecheck`                          | `deno check` (Edge Functions) + `tsc --noEmit` (Node-side: the database suite)  |
 
 ---
 
@@ -118,6 +125,9 @@ npm run db:start
 ```
 supabase/
   config.toml            Local stack definition — infrastructure as code (ADR-012)
+  migrations/             Numbered SQL, applied in order (§5.9) — schema, RLS, functions, triggers
+  seed.sql                Bootstrap/dev data, applied after migrations by db:reset / db:start
+  tests/database/         Vitest suite against a live local stack (§13.5) — see helpers.ts
   functions/
     _shared/              The kernel — every function composes from here
       config/env.ts         Validated configuration, fails fast at cold start
@@ -182,6 +192,11 @@ requiring a JWT, which is the safe direction to fail.
   half is enforced in the Next.js route-rendering config once the web client exists. This is the
   single most severe hazard the web-first architecture introduces; see the blueprint §4.11 before
   touching either half.
+- Derived/protected values (`garden_state`, `permanent_garden`, `subscriptions`, `users.is_premium`,
+  AI usage/plans) are never client-writable, even to the owning user's own row — RLS grants
+  `SELECT` only, and every write goes through a `SECURITY DEFINER` function (ADR-0024). Adding a
+  client-facing write path to any of these is a defect, not a feature — see
+  `docs/adr/0024-garden-write-protection.md` before changing one.
 
 ---
 

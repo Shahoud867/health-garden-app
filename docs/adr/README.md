@@ -35,6 +35,7 @@ starting at **ADR-0023**, so there is never a numbering collision between the tw
 
 ## Implementation decisions
 
-| ADR                                              | Decision                                                   |
-| ------------------------------------------------ | ---------------------------------------------------------- |
-| [0023](0023-declarative-edge-function-kernel.md) | A declarative endpoint factory as the Edge Function kernel |
+| ADR                                              | Decision                                                                      |
+| ------------------------------------------------ | ----------------------------------------------------------------------------- |
+| [0023](0023-declarative-edge-function-kernel.md) | A declarative endpoint factory as the Edge Function kernel                    |
+| [0024](0024-garden-write-protection.md)          | SELECT-only RLS for derived/protected values; all writes via SECURITY DEFINER |
