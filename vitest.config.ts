@@ -8,6 +8,11 @@ export default defineConfig({
   test: {
     include: ['supabase/tests/database/**/*.test.ts'],
     setupFiles: ['supabase/tests/database/setup-env.ts'],
+    // Runs once, before any test file, in its own process -- unschedules the
+    // real pg_cron jobs (Phase 6, migration 0011) for the run's duration.
+    // See global-setup.ts's own doc comment for why this suite is no longer
+    // hermetic without it.
+    globalSetup: ['supabase/tests/database/global-setup.ts'],
     // These are integration tests against one shared local Postgres instance,
     // not pure unit tests -- running test files sequentially avoids reasoning
     // about cross-file interleaving on tables a global sweep (

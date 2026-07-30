@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import { afterEach, beforeAll, afterAll, describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { afterEach, describe, expect, it } from 'vitest';
+import { cronJobsSnapshotPath } from './global-setup';
 import {
   createTestUser,
   deleteTestUser,
@@ -8,25 +10,28 @@ import {
   type TestUser,
 } from './helpers';
 
+/** "Today" as the database's Asia/Karachi CURRENT_DATE would compute it
+ * (§5.10, G-16) -- PKT is UTC+5 with no DST, so this is a fixed offset, not
+ * a real timezone conversion. Using `new Date().toISOString()` directly
+ * would be UTC's today, which can differ from the database's for several
+ * hours a day -- exactly the class of bug the timezone fix exists to avoid,
+ * so test fixtures have to respect it too, not just production code. */
+function karachiToday(): string {
+  return new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
 describe('pg_cron/pg_net background jobs (§4.6)', () => {
-  const client = newPgClient();
+  it('registered all four background jobs with their expected schedules', () => {
+    // global-setup.ts unschedules every job for the run's duration (a live
+    // job could otherwise fire mid-suite and process the same rows a test
+    // is asserting about) -- it captures this exact snapshot first, so this
+    // reads that rather than querying cron.job, which is empty by now.
+    const snapshot = JSON.parse(readFileSync(cronJobsSnapshotPath(), 'utf-8')) as {
+      jobname: string;
+      schedule: string;
+    }[];
 
-  beforeAll(async () => {
-    await client.connect();
-  });
-
-  afterAll(async () => {
-    await client.end();
-  });
-
-  it('registers all four background jobs with their expected schedules', async () => {
-    const { rows } = await client.query<{ jobname: string; schedule: string }>(
-      'SELECT jobname, schedule FROM cron.job WHERE jobname IN ' +
-        "('weekly-garden-archival', 'engagement-nudge', 'gemini-quota-watchdog', 'payment-reconciliation') " +
-        'ORDER BY jobname',
-    );
-
-    expect(rows).toEqual([
+    expect(snapshot).toEqual([
       { jobname: 'engagement-nudge', schedule: '0 13 * * *' },
       { jobname: 'gemini-quota-watchdog', schedule: '*/30 * * * *' },
       { jobname: 'payment-reconciliation', schedule: '0 4 * * *' },
@@ -101,7 +106,7 @@ describe('find_inactive_users_for_nudge privilege lockdown and correctness', () 
     await activeUser.client.from('water_logs').insert({
       user_id: activeUser.userId,
       client_uuid: randomUUID(),
-      log_date: new Date().toISOString().slice(0, 10),
+      log_date: karachiToday(),
       glasses_logged: 1,
     });
 
@@ -137,7 +142,7 @@ describe('sum_todays_ai_usage privilege lockdown and correctness', () => {
   it("sums message_count across every user's row for today", async () => {
     userA = await createTestUser();
     userB = await createTestUser();
-    const today = new Date().toISOString().slice(0, 10);
+    const today = karachiToday();
 
     const { data: before } = await serviceRoleClient.rpc('sum_todays_ai_usage');
     const baseline = (before as number) ?? 0;
