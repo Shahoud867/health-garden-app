@@ -41,7 +41,14 @@ describe('archive_and_reset_stale_garden_rows (roadmap §6.4)', () => {
       .eq('goal_type', 'hydration')
       .single();
 
-    const staleWeekStart = subtractDays(goalRow!.current_week_start as string, 10);
+    // Exactly one week back (a multiple of 7), not an arbitrary day count:
+    // the walk-forward loop advances by 7 days per iteration, so an offset
+    // that isn't week-aligned relative to current_week_start makes the
+    // number of stale weeks it finds depend on which day of the current
+    // week "today" happens to be (verified: offset 10 produced 1 archived
+    // row Monday-Thursday and 2 Friday-Sunday, a real CI failure this
+    // fixes, not a flaky one -- it reproduced every time on the wrong days).
+    const staleWeekStart = subtractDays(goalRow!.current_week_start as string, 7);
     await serviceRoleClient
       .from('garden_state')
       .update({ current_week_start: staleWeekStart, current_stage: 2, days_succeeded_this_week: 5 })
