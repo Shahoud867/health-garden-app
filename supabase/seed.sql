@@ -15,7 +15,13 @@
 INSERT INTO app_config (key, value) VALUES
   ('garden_stage_thresholds', '[0, 2, 4, 6]'),
   ('ai_chat_enabled', 'true'),
-  ('ai_daily_cap', '15');
+  ('ai_daily_cap', '15'),
+  -- Not specified anywhere in the source docs beyond "limited manual
+  -- regenerations" (Founder_B_Backend_Roadmap.md §7.3, Master Roadmap Pt.9) --
+  -- 2/week is a reasonable default that keeps plan generation the
+  -- naturally-low-frequency feature the blueprint (§7.3) describes, tunable
+  -- here without a redeploy (ADR-010) if that turns out wrong.
+  ('ai_plan_regenerations_cap', '2');
 
 INSERT INTO condition_programs (program_key, display_name, display_name_urdu, maps_to_condition_tag, is_active) VALUES
   ('diabetes_management', 'Diabetes Management', 'ذیابیطس کا انتظام', 'diabetes', FALSE),

@@ -18,18 +18,18 @@ track gated behind real-user retention data, not a launch requirement.
 
 ## Status
 
-| Phase                                     | Scope                                                           | State       |
-| ----------------------------------------- | --------------------------------------------------------------- | ----------- |
-| **1 — Project Foundation**                | Repo, tooling, git hooks, CI skeleton, docs                     | ✅ Complete |
-| **2 — Core Infrastructure**               | Edge Function kernel (42 tests), `/health` endpoint             | ✅ Complete |
-| **3 — Database Layer**                    | Schema (22 tables), RLS, garden engine, seed data               | ✅ Complete |
-| **4 — Auth & Security (backend portion)** | Auth config hardening, account export/delete, Turnstile utility | ✅ Complete |
-| 5 — Core Business Logic                   | `ai-chat`, `ai-plan-generate`, `payments-*` Edge Functions      | ⏳ Next     |
-| 6 — Background Processing                 | `pg_cron` jobs (garden reset, watchdogs, reconciliation)        | ⏳ Planned  |
-| 7 — External Integrations                 | Gemini (via provider abstraction), Web Push, payment providers  | ⏳ Planned  |
-| 8 — Production Readiness                  | Monitoring, CI/CD hardening, deployment                         | ⏳ Planned  |
-| _(then, frontend)_ Next.js web client     | Only begins once the backend above is complete                  | ⏳ Planned  |
-| _(conditional)_ React Native mobile port  | Only if the retention gate (Blueprint §13.6) clears             | Gated       |
+| Phase                                          | Scope                                                                     | State       |
+| ---------------------------------------------- | ------------------------------------------------------------------------- | ----------- |
+| **1 — Project Foundation**                     | Repo, tooling, git hooks, CI skeleton, docs                               | ✅ Complete |
+| **2 — Core Infrastructure**                    | Edge Function kernel (42 tests), `/health` endpoint                       | ✅ Complete |
+| **3 — Database Layer**                         | Schema (22 tables), RLS, garden engine, seed data                         | ✅ Complete |
+| **4 — Auth & Security (backend portion)**      | Auth config hardening, account export/delete, Turnstile utility           | ✅ Complete |
+| **5 — Core Business Logic (interim payments)** | `ai-chat`, `ai-plan-generate`, `payments-submit/approve-intent`           | ✅ Complete |
+| 6 — Background Processing                      | `pg_cron` jobs (garden reset, watchdogs, reconciliation)                  | ⏳ Next     |
+| 7 — External Integrations                      | Web Push; real merchant-API payments once ADR-008's cutover trigger fires | ⏳ Planned  |
+| 8 — Production Readiness                       | Monitoring, CI/CD hardening, deployment                                   | ⏳ Planned  |
+| _(then, frontend)_ Next.js web client          | Only begins once the backend above is complete                            | ⏳ Planned  |
+| _(conditional)_ React Native mobile port       | Only if the retention gate (Blueprint §13.6) clears                       | Gated       |
 
 This phase breakdown is a **client-agnostic backend-first sequencing** agreed for this
 implementation round — it maps onto the blueprint's own phases (§13.2) but is ordered so every
@@ -42,6 +42,14 @@ blueprint says so explicitly) — there is no way to build them before the web c
 jumping ahead of backend-first. What's genuinely backend — Turnstile's server-side verification
 call, account export/deletion (§7.9), and Supabase Auth's own rate-limit/password-policy config —
 is built now; the rest is deferred to the web client phase, tracked there, not silently dropped.
+
+**Phase 5's payments scope is the interim path only.** §6.2 lists four payment endpoints;
+`payments-create-checkout` and `payments-webhook` are explicitly "real merchant-API path, once
+available" (ADR-008) — there is no real merchant API to integrate with yet (that's blocked on
+SECP/business registration, with its own cutover trigger of 50 concurrent paying users or Week 30).
+Building them now would be placeholder code against nothing. Only `payments-submit-intent` and
+`payments-approve-intent` — the manual JazzCash/Easypaisa-transfer verification path — are real
+right now, and are what got built.
 
 ---
 
@@ -141,8 +149,10 @@ supabase/
       observability/        Structured logging with PII redaction (§7.9)
       http/                  Error taxonomy, response envelope, CORS, endpoint factory
       auth/                  JWT resolution and RLS-scoped client construction
-      validation/            Shared zod schemas mirroring database constraints
-      security/              Turnstile verification (§7.12) — not wired in until Phase 5
+      validation/            Shared zod schemas + the conditions-tag parser
+      security/              Turnstile verification (§7.12)
+      ai/                     AiProvider abstraction, system prompt, output-safety check (ADR-022)
+      config/app-config.ts   Reading app_config (ADR-010) from a service-role client
       deps.ts                Single point of external dependency control
       version.ts             API contract versioning (§6.1)
     health/                Reference endpoint — liveness probe (§6.2, §10.2)
@@ -150,6 +160,10 @@ supabase/
       index.ts               Runtime entrypoint; contains nothing else
     account-export/        Right-to-access data export (§7.9)
     account-delete/         Right-to-erasure account deletion (§7.9)
+    ai-chat/                Capped daily coaching chat (§4.3/§12.5, ADR-003)
+    ai-plan-generate/       Weekly AI plan generation, with regeneration cap
+    payments-submit-intent/  Interim payment verification — submission (ADR-008)
+    payments-approve-intent/ Interim payment verification — founder approval (ADR-0025)
 docs/adr/                 Architecture Decision Records
 .github/workflows/        CI pipeline
 ```
