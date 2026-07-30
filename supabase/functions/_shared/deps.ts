@@ -15,3 +15,9 @@ export type { ZodType } from 'zod';
 
 export { createClient } from '@supabase/supabase-js';
 export type { SupabaseClient, User } from '@supabase/supabase-js';
+
+// Web Push (RFC 8030/8291/8292) is a genuine cryptographic protocol (VAPID
+// JWT signing, AES-GCM payload encryption) -- unlike Gemini/Turnstile's plain
+// fetch calls, hand-rolling this would be a real correctness/security risk
+// for a two-person team, so a vetted library is the right call here.
+export { default as webpush } from 'web-push';

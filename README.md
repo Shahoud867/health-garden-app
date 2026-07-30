@@ -18,18 +18,18 @@ track gated behind real-user retention data, not a launch requirement.
 
 ## Status
 
-| Phase                                          | Scope                                                                     | State       |
-| ---------------------------------------------- | ------------------------------------------------------------------------- | ----------- |
-| **1 — Project Foundation**                     | Repo, tooling, git hooks, CI skeleton, docs                               | ✅ Complete |
-| **2 — Core Infrastructure**                    | Edge Function kernel (42 tests), `/health` endpoint                       | ✅ Complete |
-| **3 — Database Layer**                         | Schema (22 tables), RLS, garden engine, seed data                         | ✅ Complete |
-| **4 — Auth & Security (backend portion)**      | Auth config hardening, account export/delete, Turnstile utility           | ✅ Complete |
-| **5 — Core Business Logic (interim payments)** | `ai-chat`, `ai-plan-generate`, `payments-submit/approve-intent`           | ✅ Complete |
-| 6 — Background Processing                      | `pg_cron` jobs (garden reset, watchdogs, reconciliation)                  | ⏳ Next     |
-| 7 — External Integrations                      | Web Push; real merchant-API payments once ADR-008's cutover trigger fires | ⏳ Planned  |
-| 8 — Production Readiness                       | Monitoring, CI/CD hardening, deployment                                   | ⏳ Planned  |
-| _(then, frontend)_ Next.js web client          | Only begins once the backend above is complete                            | ⏳ Planned  |
-| _(conditional)_ React Native mobile port       | Only if the retention gate (Blueprint §13.6) clears                       | Gated       |
+| Phase                                          | Scope                                                                                               | State       |
+| ---------------------------------------------- | --------------------------------------------------------------------------------------------------- | ----------- |
+| **1 — Project Foundation**                     | Repo, tooling, git hooks, CI skeleton, docs                                                         | ✅ Complete |
+| **2 — Core Infrastructure**                    | Edge Function kernel (42 tests), `/health` endpoint                                                 | ✅ Complete |
+| **3 — Database Layer**                         | Schema (22 tables), RLS, garden engine, seed data                                                   | ✅ Complete |
+| **4 — Auth & Security (backend portion)**      | Auth config hardening, account export/delete, Turnstile utility                                     | ✅ Complete |
+| **5 — Core Business Logic (interim payments)** | `ai-chat`, `ai-plan-generate`, `payments-submit/approve-intent`                                     | ✅ Complete |
+| **6 — Background Processing**                  | `pg_cron`/`pg_net` jobs: garden archival, engagement nudges, quota watchdog, payment reconciliation | ✅ Complete |
+| 7 — External Integrations                      | Real merchant-API payments once ADR-008's cutover trigger fires                                     | ⏳ Next     |
+| 8 — Production Readiness                       | Monitoring, CI/CD hardening, deployment                                                             | ⏳ Planned  |
+| _(then, frontend)_ Next.js web client          | Only begins once the backend above is complete                                                      | ⏳ Planned  |
+| _(conditional)_ React Native mobile port       | Only if the retention gate (Blueprint §13.6) clears                                                 | Gated       |
 
 This phase breakdown is a **client-agnostic backend-first sequencing** agreed for this
 implementation round — it maps onto the blueprint's own phases (§13.2) but is ordered so every
@@ -50,6 +50,18 @@ SECP/business registration, with its own cutover trigger of 50 concurrent paying
 Building them now would be placeholder code against nothing. Only `payments-submit-intent` and
 `payments-approve-intent` — the manual JazzCash/Easypaisa-transfer verification path — are real
 right now, and are what got built.
+
+**Phase 6 fixed a schema bug found along the way.** `push_tokens` (§5.2) still had `expo_push_token`,
+Expo's push-token shape, left over from before the v2.2 web-first pivot moved notifications to the
+standards-based Web Push API (§2.8, ADR-019) — a Web Push subscription is structurally different
+(`endpoint` + `p256dh` + `auth`, not a single string). Fixed in place since nothing had ever
+consumed the table yet. Cron-triggered Edge Functions (`notify-inactive-users`,
+`gemini-quota-watchdog`, `payment-reconciliation`) authenticate via the service-role key directly —
+correct here, unlike `payments-approve-intent` (ADR-0025), because there's no human to attribute a
+scheduled job to. `pg_net`'s calls into them read the target URL from `app_config` (non-secret) and
+the service-role key from **Supabase Vault** (genuinely secret, encrypted at rest — never a plain
+table), set up once per environment; see `docs/adr/0024-garden-write-protection.md`'s reasoning
+applied to the one credential that can bypass every RLS policy at once if it ever leaked.
 
 ---
 
@@ -150,7 +162,7 @@ supabase/
       http/                  Error taxonomy, response envelope, CORS, endpoint factory
       auth/                  JWT resolution and RLS-scoped client construction
       validation/            Shared zod schemas + the conditions-tag parser
-      security/              Turnstile verification (§7.12)
+      security/              Turnstile verification (§7.12); service-role bearer-token check for cron jobs
       ai/                     AiProvider abstraction, system prompt, output-safety check (ADR-022)
       config/app-config.ts   Reading app_config (ADR-010) from a service-role client
       deps.ts                Single point of external dependency control
@@ -164,6 +176,9 @@ supabase/
     ai-plan-generate/       Weekly AI plan generation, with regeneration cap
     payments-submit-intent/  Interim payment verification — submission (ADR-008)
     payments-approve-intent/ Interim payment verification — founder approval (ADR-0025)
+    notify-inactive-users/  Engagement-nudge Web Push, cron-triggered (§4.6, §2.8)
+    gemini-quota-watchdog/  Disables ai_chat_enabled at 80% of the known Gemini quota
+    payment-reconciliation/ Flags payment_intents stuck in pending_review past 48h
 docs/adr/                 Architecture Decision Records
 .github/workflows/        CI pipeline
 ```

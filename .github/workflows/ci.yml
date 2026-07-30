@@ -106,6 +106,16 @@ jobs:
             echo "DATABASE_URL=$DB_URL"
           } >> "$GITHUB_ENV"
 
+      # invoke_edge_function() (migration 0011) reads the service-role key
+      # from Supabase Vault, never from a plain table -- this is the local
+      # stack's one-time equivalent of the manual per-environment step
+      # documented in that migration, using the real key this job already
+      # captured above rather than a hardcoded/guessed value anywhere.
+      # ubuntu-latest ships `psql` preinstalled.
+      - name: Seed the local Vault secret for cron-triggered Edge Functions
+        run: |
+          psql "$DATABASE_URL" -c "SELECT vault.create_secret('$SUPABASE_SERVICE_ROLE_KEY', 'service_role_key');"
+
       - name: Lint schema
         run: npm run db:lint
 

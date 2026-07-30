@@ -28,8 +28,8 @@ _architectural layer_, so each layer is independently testable before the next d
 | 3. Database Layer                         | §5 in full — schema, RLS, the garden engine (ADR-002), seed data                                                                                                                                       |
 | 4. Auth & Security (backend portion)      | §7.9/§7.12's backend halves — account export/deletion, Turnstile verification, Auth rate-limit/password config                                                                                         |
 | 5. Core Business Logic (interim payments) | §6.2/§6.6 — `ai-chat`, `ai-plan-generate`, `payments-submit-intent`/`payments-approve-intent` (ADR-008's manual path only; `payments-create-checkout`/`payments-webhook` wait for a real merchant API) |
-| 6. Background Processing                  | §4.6 — `pg_cron` jobs                                                                                                                                                                                  |
-| 7. External Integrations                  | §2.10/§2.11 — Web Push; real merchant-API payments once ADR-008's cutover trigger fires                                                                                                                |
+| 6. Background Processing                  | §4.6 — `pg_cron`/`pg_net`: garden archival, engagement nudges (Web Push), quota watchdog, payment reconciliation                                                                                       |
+| 7. External Integrations                  | Real merchant-API payments once ADR-008's cutover trigger fires (Web Push shipped in Phase 6, alongside the job that uses it)                                                                          |
 | 8. Production Readiness                   | §9–§10 — monitoring, CI/CD, deployment                                                                                                                                                                 |
 | _(then)_ Web client                       | §3.1a — Next.js PWA; also where ADR-020 (session cookies), §7.11 (security headers), and §7.6's CSRF/XSS mitigations land, since all three are Next.js middleware by definition, not backend work      |
 | _(conditional)_ Mobile port               | §11.12 — only if the retention gate (§13.6) clears                                                                                                                                                     |
@@ -135,7 +135,12 @@ Do not record routine choices any reasonable engineer would make the same way.
    output-safety check (`_shared/ai/output-safety.ts`, ADR-022). Go through `AiProvider` so a future
    provider swap is a new adapter, not a rewrite of every call site — and so the prompt-injection
    defenses are structurally impossible to skip by accident.
-   existing `SECURITY DEFINER` function, never a relaxed RLS policy.
+9. **Never** let the Gemini quota watchdog auto-re-enable `ai_chat_enabled`. Disable-only, always —
+   a kill switch that quietly resets itself once usage drops isn't a kill switch.
+10. **Never** put a genuine secret (a service-role key, a signing key) in `app_config`. It has zero
+    client policies, but it is still a plain table — non-secret runtime settings go there;
+    anything a `pg_dump` or replica should never reveal in plaintext goes in Supabase Vault instead
+    (`invoke_edge_function()`, migration 0011).
 
 ---
 

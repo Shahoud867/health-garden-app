@@ -8,10 +8,21 @@ CREATE TABLE app_config (
   updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
+-- A W3C Push API subscription (endpoint + p256dh + auth), not a single Expo
+-- push token — §5.2's original sketch still had the pre-pivot expo_push_token
+-- shape, left over from before the v2.2 web-first pivot moved notifications
+-- to the standards-based Web Push API (§2.8, ADR-019). Nothing has ever
+-- written to this table (Phase 6 is its first real consumer), so this
+-- corrects the column shape in place rather than layering an ALTER TABLE
+-- migration on top of a table no code has used yet. If/when the mobile port
+-- ships, Expo Push is additive (ADR-005 reinstated) — a nullable
+-- expo_push_token column added then, not a reason to keep the wrong shape now.
 CREATE TABLE push_tokens (
   id BIGSERIAL PRIMARY KEY,
   user_id UUID NOT NULL REFERENCES users (id) ON DELETE CASCADE,
-  expo_push_token VARCHAR(255) NOT NULL UNIQUE,
+  endpoint TEXT NOT NULL UNIQUE,
+  p256dh TEXT NOT NULL,
+  auth TEXT NOT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_push_tokens_user ON push_tokens (user_id);

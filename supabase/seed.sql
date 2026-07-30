@@ -21,7 +21,15 @@ INSERT INTO app_config (key, value) VALUES
   -- 2/week is a reasonable default that keeps plan generation the
   -- naturally-low-frequency feature the blueprint (§7.3) describes, tunable
   -- here without a redeploy (ADR-010) if that turns out wrong.
-  ('ai_plan_regenerations_cap', '2');
+  ('ai_plan_regenerations_cap', '2'),
+  -- Non-secret (migration 0011) -- fixed and deterministic for the local
+  -- stack (config.toml pins the API port to 54321). Staging/production set
+  -- their own real value as a one-time per-environment step, never via a
+  -- migration. The vault secret 'service_role_key' invoke_edge_function()
+  -- also needs is genuinely secret, so it is NOT seeded here -- see
+  -- .github/workflows/ci.yml's database job and README's local dev section
+  -- for how it's populated from the already-running stack's own key.
+  ('edge_functions_base_url', '"http://127.0.0.1:54321/functions/v1"');
 
 INSERT INTO condition_programs (program_key, display_name, display_name_urdu, maps_to_condition_tag, is_active) VALUES
   ('diabetes_management', 'Diabetes Management', 'ذیابیطس کا انتظام', 'diabetes', FALSE),
