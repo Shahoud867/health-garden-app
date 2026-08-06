@@ -18,18 +18,18 @@ track gated behind real-user retention data, not a launch requirement.
 
 ## Status
 
-| Phase                                          | Scope                                                                                               | State       |
-| ---------------------------------------------- | --------------------------------------------------------------------------------------------------- | ----------- |
-| **1 — Project Foundation**                     | Repo, tooling, git hooks, CI skeleton, docs                                                         | ✅ Complete |
-| **2 — Core Infrastructure**                    | Edge Function kernel (42 tests), `/health` endpoint                                                 | ✅ Complete |
-| **3 — Database Layer**                         | Schema (22 tables), RLS, garden engine, seed data                                                   | ✅ Complete |
-| **4 — Auth & Security (backend portion)**      | Auth config hardening, account export/delete, Turnstile utility                                     | ✅ Complete |
-| **5 — Core Business Logic (interim payments)** | `ai-chat`, `ai-plan-generate`, `payments-submit/approve-intent`                                     | ✅ Complete |
-| **6 — Background Processing**                  | `pg_cron`/`pg_net` jobs: garden archival, engagement nudges, quota watchdog, payment reconciliation | ✅ Complete |
-| 7 — External Integrations                      | Real merchant-API payments once ADR-008's cutover trigger fires                                     | ⏳ Next     |
-| 8 — Production Readiness                       | Monitoring, CI/CD hardening, deployment                                                             | ⏳ Planned  |
-| _(then, frontend)_ Next.js web client          | Only begins once the backend above is complete                                                      | ⏳ Planned  |
-| _(conditional)_ React Native mobile port       | Only if the retention gate (Blueprint §13.6) clears                                                 | Gated       |
+| Phase                                          | Scope                                                                                               | State                          |
+| ---------------------------------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------ |
+| **1 — Project Foundation**                     | Repo, tooling, git hooks, CI skeleton, docs                                                         | ✅ Complete                    |
+| **2 — Core Infrastructure**                    | Edge Function kernel (42 tests), `/health` endpoint                                                 | ✅ Complete                    |
+| **3 — Database Layer**                         | Schema (22 tables), RLS, garden engine, seed data                                                   | ✅ Complete                    |
+| **4 — Auth & Security (backend portion)**      | Auth config hardening, account export/delete, Turnstile utility                                     | ✅ Complete                    |
+| **5 — Core Business Logic (interim payments)** | `ai-chat`, `ai-plan-generate`, `payments-submit/approve-intent`                                     | ✅ Complete                    |
+| **6 — Background Processing**                  | `pg_cron`/`pg_net` jobs: garden archival, engagement nudges, quota watchdog, payment reconciliation | ✅ Complete                    |
+| 7 — External Integrations                      | Real merchant-API payments once ADR-008's cutover trigger fires                                     | ⏳ Gated                       |
+| **8 — Production Readiness**                   | Sentry/PostHog wiring, `/health` monitoring, security review, CI/CD + deploy docs                   | 🔶 Code done, accounts pending |
+| _(then, frontend)_ Next.js web client          | Only begins once the backend above is complete                                                      | ⏳ Planned                     |
+| _(conditional)_ React Native mobile port       | Only if the retention gate (Blueprint §13.6) clears                                                 | Gated                          |
 
 This phase breakdown is a **client-agnostic backend-first sequencing** agreed for this
 implementation round — it maps onto the blueprint's own phases (§13.2) but is ordered so every
@@ -83,9 +83,37 @@ been built — reviewed, resolved with the user, and landed before continuing to
   plan and a monthly workout plan coexist.
 - **`GEMINI_MODEL` default fixed**: `gemini-2.0-flash` was retired 1 June 2026; the default is now
   `gemini-3.5-flash`. This was silently broken (chat degraded to a templated fallback with no
-  error; plan generation failed loudly) until caught during this review — verify the real quota
-  threshold in `gemini-quota-watchdog` against your actual Google AI Studio rate limits, since the
-  seeded `1200` figure is an unverified assumption, not a number read from a live account.
+  error; plan generation failed loudly) until caught during this review.
+- **A real race condition was found and fixed**: `payments-submit-intent`'s rate limit (max 3
+  pending submissions/24h) was a separate count-then-insert, so two concurrent submissions could
+  each read "under the limit" before either committed. Fixed the same way `increment_daily_ai_usage`
+  (ADR-003) already closed the identical class of race for the AI cap — one atomic
+  `SECURITY DEFINER` function (`submit_payment_intent_if_under_limit`, migration 0014), not
+  application-level counting.
+- **`gemini-quota-watchdog`'s threshold is now config-driven** (`app_config.gemini_quota_daily_threshold`,
+  seed.sql), not a code constant — `1200` is a reasonable default (80% of the ~1,500 req/day several
+  independent sources report for `gemini-3.5-flash`'s free tier; Google's own docs no longer publish
+  per-model numbers, deferring to the per-account AI Studio dashboard), but it is still not a number
+  read from _this_ project's live account. Check
+  [aistudio.google.com/rate-limit](https://aistudio.google.com/rate-limit) and update that config row
+  directly — no deploy needed — if it's wrong.
+
+**Phase 7 stays gated, deliberately, not by oversight.** `payments-create-checkout`/
+`payments-webhook` need a real merchant account this project doesn't have yet (ADR-008's cutover
+trigger — 50 concurrent paying users or Week 30 — hasn't fired). Building either now would be
+placeholder code against nothing, which this project's own conventions rule out
+(`CONTRIBUTING.md`). Nothing changes here until that trigger fires; see Phase 5's note above for
+the full reasoning, which still applies unchanged.
+
+**Phase 8 is code-complete, account-setup pending** — everything buildable without a human
+clicking "create account" on a third-party service is done and tested: Sentry error reporting and
+PostHog business-event capture are wired into the kernel/handlers (config-gated, silent no-op
+until credentials exist), `/health` is ready for a monitor, a real security-hardening pass found
+and fixed the race condition above, and `docs/operations.md` is the exact setup checklist for
+UptimeRobot, Sentry, PostHog, and deploying to a real Supabase project for the first time. What's
+left is not code — it's a human creating three free-tier accounts and clicking through
+`docs/operations.md` once, plus enabling GitHub branch protection (this README's CONTRIBUTING.md
+link, "Branching and review") the same way.
 
 ---
 
@@ -182,7 +210,7 @@ supabase/
   functions/
     _shared/              The kernel — every function composes from here
       config/env.ts         Validated configuration, fails fast at cold start
-      observability/        Structured logging with PII redaction (§7.9)
+      observability/        Structured logging with PII redaction (§7.9); Sentry/PostHog (Phase 8)
       http/                  Error taxonomy, response envelope, CORS, endpoint factory
       auth/                  JWT resolution and RLS-scoped client construction
       validation/            Shared zod schemas + the conditions-tag parser
@@ -204,6 +232,7 @@ supabase/
     gemini-quota-watchdog/  Disables ai_chat_enabled at 80% of the known Gemini quota
     payment-reconciliation/ Flags payment_intents stuck in pending_review past 48h
 docs/adr/                 Architecture Decision Records
+docs/operations.md        Phase 8 setup: UptimeRobot, Sentry, PostHog, first real deploy
 .github/workflows/        CI pipeline
 ```
 

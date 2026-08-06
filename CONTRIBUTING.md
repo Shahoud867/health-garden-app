@@ -151,3 +151,22 @@ impractical — but a PR gives CI a place to run and leaves a written record of 
 point.
 
 Never commit directly to `main`.
+
+**This is a written rule, not yet an enforced one** — nothing on GitHub currently stops a direct
+push to `main`, and both founders have done it (harmlessly so far, but a real conflict is a matter
+of when, not if, once two people are pushing independently). Whoever has repo admin access should
+turn on branch protection once, in the GitHub UI (Settings → Branches → Add branch protection rule
+→ branch name pattern `main`):
+
+- **Require a pull request before merging** — this alone is what makes "never commit directly to
+  main" true instead of aspirational.
+- **Require status checks to pass before merging**, and select all three CI jobs (`Format, lint,
+typecheck, test`, `Database schema, RLS, garden engine`, `Secret scan`) — a broken branch can no
+  longer reach `main` at all, closing the exact gap that let an unformatted file and a bad seed row
+  sit on `main` red for several commits before anyone noticed.
+- **Do not** require approving reviews from a second person — CONTRIBUTING already states formal
+  review is impractical at two people; requiring it here would just be friction with no one to
+  provide it. Revisit if the team grows.
+
+This is a five-minute, one-time setting — GitHub doesn't expose it over the unauthenticated public
+API, so it has to be a human clicking the toggle, not something a coding session can do for you.
