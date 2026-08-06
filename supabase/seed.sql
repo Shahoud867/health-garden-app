@@ -22,6 +22,17 @@ INSERT INTO app_config (key, value) VALUES
   ('garden_stage_thresholds', '[0, 2, 4, 6]'),
   ('ai_chat_enabled', 'true'),
   ('ai_daily_cap', '15'),
+  -- Config-driven, not a code constant (gemini-quota-watchdog/handler.ts),
+  -- specifically so this can be corrected the moment it's checked against a
+  -- real account without a deploy. 1200 (80% of 1,500 req/day) is a
+  -- reasonable starting default, cross-checked against several independent
+  -- sources reporting gemini-3.5-flash's free tier at 1,500 RPD / 10 RPM as
+  -- of August 2026 -- Google's own docs no longer publish per-model numbers
+  -- (https://ai.google.dev/gemini-api/docs/rate-limits defers entirely to
+  -- the per-account dashboard), so this is not a verified account-specific
+  -- figure. Check https://aistudio.google.com/rate-limit for this project's
+  -- actual account and update this row (not the code) if it differs.
+  ('gemini_quota_daily_threshold', '1200'),
   -- Not specified anywhere in the source docs beyond "limited manual
   -- regenerations" (Founder_B_Backend_Roadmap.md §7.3, Master Roadmap Pt.9) --
   -- 2/week is a reasonable default that keeps plan generation the

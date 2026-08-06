@@ -1,11 +1,22 @@
 import { assertEquals, assertRejects } from '@std/assert';
 import { AppError } from '../_shared/http/errors.ts';
+import type { PostHogClient } from '../_shared/observability/posthog.ts';
 import {
   type AdminAuthClient,
   type AuditLogClient,
   deleteAccount,
   type UserRowClient,
 } from './handler.ts';
+
+function fakeAnalytics(
+  captured: { event: string; distinctId: string }[] = [],
+): PostHogClient {
+  return {
+    capture: (event, distinctId) => {
+      captured.push({ event, distinctId });
+    },
+  };
+}
 
 interface FakeState {
   auditInserts: Record<string, unknown>[];
@@ -59,21 +70,37 @@ function fakeDeps(overrides?: {
 }
 
 Deno.test('deleteAccount', async (t) => {
-  await t.step('writes an audit entry before deleting the auth user', async () => {
-    const { userDb, serviceDb, state } = fakeDeps({ profile: { id: 'user-42' } });
+  await t.step(
+    'writes an audit entry before deleting the auth user, then captures analytics',
+    async () => {
+      const { userDb, serviceDb, state } = fakeDeps({ profile: { id: 'user-42' } });
+      const captured: { event: string; distinctId: string }[] = [];
 
-    const result = await deleteAccount({ userDb, serviceDb, authId: 'auth-42' });
+      const result = await deleteAccount({
+        userDb,
+        serviceDb,
+        authId: 'auth-42',
+        analytics: fakeAnalytics(captured),
+      });
 
-    assertEquals(result, { deleted: true });
-    assertEquals(state.auditInserts.length, 1);
-    assertEquals(state.auditInserts[0]?.user_id, 'user-42');
-    assertEquals(state.auditInserts[0]?.event_type, 'account_deletion_requested');
-    assertEquals(state.deletedAuthIds, ['auth-42']);
-  });
+      assertEquals(result, { deleted: true });
+      assertEquals(state.auditInserts.length, 1);
+      assertEquals(state.auditInserts[0]?.user_id, 'user-42');
+      assertEquals(state.auditInserts[0]?.event_type, 'account_deletion_requested');
+      assertEquals(state.deletedAuthIds, ['auth-42']);
+      // Reports against the surviving users.id, not the just-deleted authId.
+      assertEquals(captured, [{ event: 'account_deleted', distinctId: 'user-42' }]);
+    },
+  );
 
   await t.step('never accepts a caller-supplied target -- only ctx.auth.authId', async () => {
     const { userDb, serviceDb, state } = fakeDeps();
-    await deleteAccount({ userDb, serviceDb, authId: 'the-callers-own-auth-id' });
+    await deleteAccount({
+      userDb,
+      serviceDb,
+      authId: 'the-callers-own-auth-id',
+      analytics: fakeAnalytics(),
+    });
     assertEquals(state.deletedAuthIds, ['the-callers-own-auth-id']);
   });
 
@@ -81,7 +108,7 @@ Deno.test('deleteAccount', async (t) => {
     const { userDb, serviceDb, state } = fakeDeps({ profileError: 'row not found' });
 
     const error = await assertRejects(
-      () => deleteAccount({ userDb, serviceDb, authId: 'auth-1' }),
+      () => deleteAccount({ userDb, serviceDb, authId: 'auth-1', analytics: fakeAnalytics() }),
       AppError,
     );
     assertEquals((error as AppError).details?.step, 'resolve_profile');
@@ -92,7 +119,7 @@ Deno.test('deleteAccount', async (t) => {
     const { userDb, serviceDb, state } = fakeDeps({ auditError: 'insert failed' });
 
     const error = await assertRejects(
-      () => deleteAccount({ userDb, serviceDb, authId: 'auth-1' }),
+      () => deleteAccount({ userDb, serviceDb, authId: 'auth-1', analytics: fakeAnalytics() }),
       AppError,
     );
     assertEquals((error as AppError).details?.step, 'write_audit_log');
@@ -103,7 +130,7 @@ Deno.test('deleteAccount', async (t) => {
     const { userDb, serviceDb } = fakeDeps({ deleteError: 'GoTrue unavailable' });
 
     const error = await assertRejects(
-      () => deleteAccount({ userDb, serviceDb, authId: 'auth-1' }),
+      () => deleteAccount({ userDb, serviceDb, authId: 'auth-1', analytics: fakeAnalytics() }),
       AppError,
     );
     assertEquals((error as AppError).details?.step, 'delete_auth_user');

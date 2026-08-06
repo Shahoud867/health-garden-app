@@ -249,6 +249,32 @@ Deno.test('kernel', async (t) => {
     assertEquals(JSON.stringify(body).includes('hunter2'), false);
   });
 
+  await t.step('a 5xx still responds correctly with SENTRY_DSN configured', async () => {
+    // Regression coverage for the kernel's Sentry wiring (`sentry.ts` itself
+    // is fully unit-tested in isolation): the reporter's own HTTP call is
+    // fire-and-forget against a real (unreachable in this test env) host, so
+    // this only needs to prove that configuring it never changes the
+    // response a caller gets.
+    Deno.env.set('SENTRY_DSN', 'https://testkey@o0.ingest.sentry.io/1');
+    resetConfigCache();
+    try {
+      const handler = defineEndpoint({
+        name: 'test',
+        methods: ['GET'],
+        auth: 'none',
+        handler: () => {
+          throw new Error('boom');
+        },
+      });
+
+      const response = await handler(request('GET'));
+      assertEquals(response.status, 500);
+    } finally {
+      Deno.env.delete('SENTRY_DSN');
+      resetConfigCache();
+    }
+  });
+
   await t.step('propagates a Response returned directly by a handler', async () => {
     const handler = defineEndpoint({
       name: 'test',

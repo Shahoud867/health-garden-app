@@ -18,6 +18,30 @@ Deno.test('createConfig parses a complete environment', () => {
   assertEquals(config.supabaseUrl, 'http://127.0.0.1:54321');
   assertEquals(config.environment, 'local');
   assertEquals(config.isProduction, false);
+  assertEquals(config.sentryDsn, undefined);
+});
+
+Deno.test('createConfig picks up SENTRY_DSN when set, trimmed', () => {
+  const config = createConfig(envFrom({ ...COMPLETE_ENV, SENTRY_DSN: '  https://key@host/1  ' }));
+  assertEquals(config.sentryDsn, 'https://key@host/1');
+});
+
+Deno.test('createConfig defaults posthogHost to the US ingest host', () => {
+  const config = createConfig(envFrom(COMPLETE_ENV));
+  assertEquals(config.posthogApiKey, undefined);
+  assertEquals(config.posthogHost, 'https://us.i.posthog.com');
+});
+
+Deno.test('createConfig picks up POSTHOG_API_KEY/POSTHOG_HOST when set', () => {
+  const config = createConfig(
+    envFrom({
+      ...COMPLETE_ENV,
+      POSTHOG_API_KEY: 'phc_abc',
+      POSTHOG_HOST: 'https://eu.i.posthog.com',
+    }),
+  );
+  assertEquals(config.posthogApiKey, 'phc_abc');
+  assertEquals(config.posthogHost, 'https://eu.i.posthog.com');
 });
 
 Deno.test('createConfig trims surrounding whitespace', () => {

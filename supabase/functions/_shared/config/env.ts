@@ -34,6 +34,22 @@ export interface AppConfig {
   readonly logLevel: LogLevel;
   /** True for environments where verbose diagnostics are safe to emit. */
   readonly isProduction: boolean;
+  /**
+   * SECRET-ish (a write-only ingest endpoint, not a credential that reads
+   * anything back) — optional by design (`_shared/observability/sentry.ts`
+   * degrades to a silent no-op without it). Unset until a real Sentry
+   * project exists; nothing about cold start, local dev, or CI should ever
+   * require one (Blueprint ADR-013).
+   */
+  readonly sentryDsn: string | undefined;
+  /** SECRET-ish (write-only ingest, ADR-013) -- same optional/no-op-when-unset
+   * posture as `sentryDsn` (`_shared/observability/posthog.ts`). */
+  readonly posthogApiKey: string | undefined;
+  /** Region-specific ingest host PostHog's project settings state for this
+   * key (`us.i.posthog.com` or `eu.i.posthog.com`) -- defaults to the US
+   * host, the more common case, rather than forcing every environment to
+   * set it explicitly for no reason. */
+  readonly posthogHost: string;
 }
 
 /** Raised when configuration is absent or malformed at cold start. */
@@ -105,6 +121,9 @@ export function createConfig(source: EnvSource): AppConfig {
     environment,
     logLevel: parseLogLevel(source.get('LOG_LEVEL'), environment),
     isProduction: environment === 'production',
+    sentryDsn: source.get('SENTRY_DSN')?.trim() || undefined,
+    posthogApiKey: source.get('POSTHOG_API_KEY')?.trim() || undefined,
+    posthogHost: source.get('POSTHOG_HOST')?.trim() || 'https://us.i.posthog.com',
   });
 }
 

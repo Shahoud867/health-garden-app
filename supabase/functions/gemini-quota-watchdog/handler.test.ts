@@ -5,6 +5,7 @@ import { type AiConfigClient, checkGeminiQuota, type UsageSumClient } from './ha
 interface Options {
   totalUsageToday?: number;
   currentlyEnabled?: boolean;
+  threshold?: number;
 }
 
 interface Calls {
@@ -23,9 +24,16 @@ function fakeConfigDb(options: Options, calls: Calls): AiConfigClient {
   return {
     from: (_table: string) => ({
       select: (_columns: string) => ({
-        eq: (_column: string, _value: unknown) =>
+        in: (_column: string, _values: readonly string[]) =>
           Promise.resolve({
-            data: [{ value: options.currentlyEnabled ?? true }],
+            data: [
+              { key: 'ai_chat_enabled', value: options.currentlyEnabled ?? true },
+              // Only present when a test overrides it -- confirms the handler
+              // falls back to its own default rather than requiring the row.
+              ...(options.threshold !== undefined
+                ? [{ key: 'gemini_quota_daily_threshold', value: options.threshold }]
+                : []),
+            ],
             error: null,
           }),
       }),
@@ -86,6 +94,21 @@ Deno.test('checkGeminiQuota', async (t) => {
     assertEquals(result.disabledJustNow, false);
     assertEquals(calls.updates.length, 0);
     assertEquals(calls.errorLogs.length, 0);
+  });
+
+  await t.step('honours an app_config override instead of the built-in default', async () => {
+    const calls: Calls = { errorLogs: [], updates: [] };
+    // 500 is under the built-in 1200 default but over this account-specific
+    // override -- proves the threshold is genuinely read from config, not
+    // just labelled from it.
+    const result = await checkGeminiQuota({
+      usageDb: fakeUsageDb({ totalUsageToday: 500 }),
+      configDb: fakeConfigDb({ currentlyEnabled: true, threshold: 400 }, calls),
+      logger: fakeLogger(calls),
+    });
+
+    assertEquals(result, { totalUsageToday: 500, threshold: 400, disabledJustNow: true });
+    assertEquals(calls.updates.length, 1);
   });
 
   await t.step('surfaces a usage-sum failure as an AppError', async () => {

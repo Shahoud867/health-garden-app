@@ -8,21 +8,38 @@
  * isn't a kill switch -- a founder confirming it's safe to re-enable is the
  * point, not friction to route around.
  *
- * "Alerts" here means a structured, high-severity log entry -- real Sentry
- * wiring is Phase 8 (Production Readiness); this is what makes that wiring
- * meaningful once it exists, rather than inventing a notification channel
- * ahead of the observability stack ADR-013 actually specifies.
+ * "Alerts" here means a structured, high-severity (`logger.error`) log entry.
+ * This function's own error paths (a failed usage-sum RPC, a failed config
+ * write) also reach Sentry automatically once `SENTRY_DSN` is set -- the
+ * kernel reports every 5xx centrally (`_shared/http/endpoint.ts`), so this
+ * handler does not need its own reporting call. A quota threshold being
+ * crossed is logged, not thrown, precisely because it is not that kind of
+ * failure -- it is the watchdog doing its job.
  */
 
 import { defineEndpoint } from '../_shared/http/endpoint.ts';
 import { Errors } from '../_shared/http/errors.ts';
 import { isServiceRoleCaller } from '../_shared/security/service-role-auth.ts';
 import { createServiceRoleClient } from '../_shared/auth/context.ts';
+import {
+  type AppConfigClient,
+  configBoolean,
+  configNumber,
+  readAppConfig,
+} from '../_shared/config/app-config.ts';
 import type { Logger } from '../_shared/observability/logger.ts';
 
-// 80% of Gemini's known free-tier ceiling, ~1,500 requests/day project-wide
-// (Founder_B_Backend_Roadmap.md §7.1) -- matches §4.6's "80% of known quota."
-const QUOTA_THRESHOLD = 1200;
+// Fallback only -- the real value is read from app_config
+// ('gemini_quota_daily_threshold', seed.sql) so it can be corrected in
+// seconds from a verified account limit, never a code deploy. 1200 is 80% of
+// 1,500 requests/day, which is what gemini-3.5-flash's free tier is widely
+// reported at (Google's own docs no longer publish per-model numbers --
+// https://ai.google.dev/gemini-api/docs/rate-limits explicitly defers to the
+// per-account AI Studio dashboard) -- a reasonable starting default, not a
+// verified account-specific number. Re-check against
+// https://aistudio.google.com/rate-limit and update the config row, not this
+// constant, if it's wrong for this project's actual account.
+const DEFAULT_QUOTA_THRESHOLD = 1200;
 
 export interface WatchdogResponse {
   readonly totalUsageToday: number;
@@ -36,14 +53,18 @@ export interface UsageSumClient {
   ): PromiseLike<{ data: number | null; error: { message: string } | null }>;
 }
 
-export interface AiConfigClient {
+/** Unifies AppConfigClient's read shape (`select().in()`) with the write
+ * this handler also needs (`update().eq()`) into one `from()` override --
+ * the same "one unified from(), not colliding overloads" pattern documented
+ * on ai-plan-generate's PlanServiceClient. */
+export interface AiConfigClient extends AppConfigClient {
   from(table: string): {
     select(columns: string): {
-      eq(
+      in(
         column: string,
-        value: unknown,
+        values: readonly string[],
       ): PromiseLike<{
-        data: readonly Record<string, unknown>[] | null;
+        data: readonly { key: string; value: unknown }[] | null;
         error: { message: string } | null;
       }>;
     };
@@ -65,23 +86,18 @@ export async function checkGeminiQuota(deps: {
     throw Errors.internal({ details: { step: 'sum_usage', message: error?.message } });
   }
 
-  if (total < QUOTA_THRESHOLD) {
-    return { totalUsageToday: total, threshold: QUOTA_THRESHOLD, disabledJustNow: false };
+  const config = await readAppConfig(configDb, ['ai_chat_enabled', 'gemini_quota_daily_threshold']);
+  const threshold = configNumber(config, 'gemini_quota_daily_threshold', DEFAULT_QUOTA_THRESHOLD);
+
+  if (total < threshold) {
+    return { totalUsageToday: total, threshold, disabledJustNow: false };
   }
 
-  const { data: configRows, error: configError } = await configDb
-    .from('app_config')
-    .select('value')
-    .eq('key', 'ai_chat_enabled');
-  if (configError !== null) {
-    throw Errors.internal({ details: { step: 'read_config', message: configError.message } });
-  }
-  const currentlyEnabled = (configRows?.[0]?.value as boolean | undefined) ?? true;
-
+  const currentlyEnabled = configBoolean(config, 'ai_chat_enabled', true);
   if (!currentlyEnabled) {
     // Already disabled by a previous run today -- nothing changed, no need
     // to re-log the same alert every 30 minutes for the rest of the day.
-    return { totalUsageToday: total, threshold: QUOTA_THRESHOLD, disabledJustNow: false };
+    return { totalUsageToday: total, threshold, disabledJustNow: false };
   }
 
   const { error: updateError } = await configDb
@@ -94,10 +110,10 @@ export async function checkGeminiQuota(deps: {
 
   logger.error('gemini_quota_threshold_reached', {
     totalUsageToday: total,
-    threshold: QUOTA_THRESHOLD,
+    threshold,
   });
 
-  return { totalUsageToday: total, threshold: QUOTA_THRESHOLD, disabledJustNow: true };
+  return { totalUsageToday: total, threshold, disabledJustNow: true };
 }
 
 export const handleGeminiQuotaWatchdog = defineEndpoint<undefined, WatchdogResponse>({

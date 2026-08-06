@@ -22,6 +22,7 @@ import { defineEndpoint } from '../_shared/http/endpoint.ts';
 import { z } from '../_shared/deps.ts';
 import { Errors } from '../_shared/http/errors.ts';
 import { createServiceRoleClient } from '../_shared/auth/context.ts';
+import { createPostHogClient, type PostHogClient } from '../_shared/observability/posthog.ts';
 
 const SUBSCRIPTION_PERIOD_DAYS = 30;
 
@@ -74,8 +75,9 @@ export async function approvePaymentIntent(deps: {
   readonly reviewerUserId: string;
   readonly intentId: number;
   readonly decision: 'approved' | 'rejected';
+  readonly analytics: PostHogClient;
 }): Promise<ApproveIntentResponse> {
-  const { serviceDb, reviewerUserId, intentId, decision } = deps;
+  const { serviceDb, reviewerUserId, intentId, decision, analytics } = deps;
 
   const { data: intentRows, error: intentError } = await serviceDb
     .from('payment_intents')
@@ -123,6 +125,13 @@ export async function approvePaymentIntent(deps: {
         details: { step: 'insert_subscription', message: subscriptionError.message },
       });
     }
+
+    // Fire-and-forget, after the write that actually matters has already
+    // succeeded -- an analytics call must never be why a real approval
+    // fails (same reasoning as the kernel's Sentry wiring).
+    analytics.capture('subscription_activated', intent.user_id, {
+      amount_pkr: intent.amount_pkr,
+    });
   }
 
   const { error: auditError } = await serviceDb.from('audit_log').insert({
@@ -167,6 +176,7 @@ export const handlePaymentsApproveIntent = defineEndpoint<
       reviewerUserId: reviewer.id,
       intentId: ctx.body.intentId,
       decision: ctx.body.decision,
+      analytics: createPostHogClient(ctx.config.posthogApiKey, { host: ctx.config.posthogHost }),
     });
   },
 });

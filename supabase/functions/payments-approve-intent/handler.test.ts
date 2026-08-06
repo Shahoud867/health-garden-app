@@ -1,5 +1,6 @@
 import { assertEquals, assertRejects } from '@std/assert';
 import { AppError } from '../_shared/http/errors.ts';
+import type { PostHogClient } from '../_shared/observability/posthog.ts';
 import { type ApproveIntentClient, approvePaymentIntent, isAdminEmail } from './handler.ts';
 
 Deno.test('isAdminEmail', async (t) => {
@@ -63,16 +64,30 @@ function fakeServiceDb(options: Options, writes: Writes): ApproveIntentClient {
 
 const defaultIntent = { id: 1, user_id: 'user-1', amount_pkr: 500, status: 'pending_review' };
 
+interface AnalyticsCalls {
+  captured: { event: string; distinctId: string; properties?: Record<string, unknown> }[];
+}
+
+function fakeAnalytics(calls: AnalyticsCalls): PostHogClient {
+  return {
+    capture: (event, distinctId, properties) => {
+      calls.captured.push({ event, distinctId, properties });
+    },
+  };
+}
+
 Deno.test('approvePaymentIntent', async (t) => {
   await t.step(
     'approving activates a subscription and syncs is_premium via the DB trigger',
     async () => {
       const writes: Writes = { intentUpdates: [], subscriptionInserts: [], auditInserts: [] };
+      const analyticsCalls: AnalyticsCalls = { captured: [] };
       const result = await approvePaymentIntent({
         serviceDb: fakeServiceDb({ intent: defaultIntent }, writes),
         reviewerUserId: 'admin-1',
         intentId: 1,
         decision: 'approved',
+        analytics: fakeAnalytics(analyticsCalls),
       });
 
       assertEquals(result, { status: 'approved' });
@@ -83,23 +98,32 @@ Deno.test('approvePaymentIntent', async (t) => {
       assertEquals(writes.subscriptionInserts[0]?.amount_pkr, 500);
       assertEquals(writes.subscriptionInserts[0]?.status, 'active');
       assertEquals(writes.auditInserts[0]?.event_type, 'payment_intent_approved');
+      assertEquals(analyticsCalls.captured, [
+        { event: 'subscription_activated', distinctId: 'user-1', properties: { amount_pkr: 500 } },
+      ]);
     },
   );
 
-  await t.step('rejecting never creates a subscription', async () => {
-    const writes: Writes = { intentUpdates: [], subscriptionInserts: [], auditInserts: [] };
-    const result = await approvePaymentIntent({
-      serviceDb: fakeServiceDb({ intent: defaultIntent }, writes),
-      reviewerUserId: 'admin-1',
-      intentId: 1,
-      decision: 'rejected',
-    });
+  await t.step(
+    'rejecting never creates a subscription, and captures no analytics event',
+    async () => {
+      const writes: Writes = { intentUpdates: [], subscriptionInserts: [], auditInserts: [] };
+      const analyticsCalls: AnalyticsCalls = { captured: [] };
+      const result = await approvePaymentIntent({
+        serviceDb: fakeServiceDb({ intent: defaultIntent }, writes),
+        reviewerUserId: 'admin-1',
+        intentId: 1,
+        decision: 'rejected',
+        analytics: fakeAnalytics(analyticsCalls),
+      });
 
-    assertEquals(result, { status: 'rejected' });
-    assertEquals(writes.intentUpdates[0]?.status, 'rejected');
-    assertEquals(writes.subscriptionInserts.length, 0);
-    assertEquals(writes.auditInserts[0]?.event_type, 'payment_intent_rejected');
-  });
+      assertEquals(result, { status: 'rejected' });
+      assertEquals(writes.intentUpdates[0]?.status, 'rejected');
+      assertEquals(writes.subscriptionInserts.length, 0);
+      assertEquals(writes.auditInserts[0]?.event_type, 'payment_intent_rejected');
+      assertEquals(analyticsCalls.captured.length, 0);
+    },
+  );
 
   await t.step('throws not_found for a nonexistent intent', async () => {
     const writes: Writes = { intentUpdates: [], subscriptionInserts: [], auditInserts: [] };
@@ -110,6 +134,7 @@ Deno.test('approvePaymentIntent', async (t) => {
           reviewerUserId: 'admin-1',
           intentId: 999,
           decision: 'approved',
+          analytics: fakeAnalytics({ captured: [] }),
         }),
       AppError,
     );
@@ -125,6 +150,7 @@ Deno.test('approvePaymentIntent', async (t) => {
           reviewerUserId: 'admin-1',
           intentId: 1,
           decision: 'approved',
+          analytics: fakeAnalytics({ captured: [] }),
         }),
       AppError,
     );

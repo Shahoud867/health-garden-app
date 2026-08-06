@@ -24,6 +24,7 @@
 import type { ZodType } from '../deps.ts';
 import { type AppConfig, getConfig } from '../config/env.ts';
 import { createLogger, type Logger } from '../observability/logger.ts';
+import { createSentryReporter } from '../observability/sentry.ts';
 import { type AuthContext, resolveAuthContext } from '../auth/context.ts';
 import { AppError, Errors, toAppError } from './errors.ts';
 import { errorResponse, jsonResponse, noContentResponse } from './response.ts';
@@ -245,8 +246,23 @@ export function defineEndpoint<TBody = undefined, TResult = unknown>(
         ...(logAtErrorLevel ? { error: appError.cause ?? appError } : {}),
       };
 
-      if (logAtErrorLevel) logger.error('request_failed', record);
-      else logger.warn('request_rejected', record);
+      if (logAtErrorLevel) {
+        logger.error('request_failed', record);
+        // The logger (above) is the source of truth regardless of whether
+        // this fires -- Sentry is a config-gated convenience on top of it,
+        // never a second thing a request's success depends on. No-ops
+        // silently without SENTRY_DSN set (`_shared/observability/sentry.ts`).
+        createSentryReporter(config.sentryDsn, { environment: config.environment })
+          .captureException(appError.cause ?? appError, {
+            request_id: requestId,
+            endpoint: endpoint.name,
+            error_code: appError.code,
+            status: appError.httpStatus,
+            details: appError.details,
+          });
+      } else {
+        logger.warn('request_rejected', record);
+      }
 
       return errorResponse(appError, { requestId });
     }

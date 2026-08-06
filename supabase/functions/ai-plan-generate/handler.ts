@@ -43,6 +43,7 @@ import type {
 } from '../_shared/ai/provider.ts';
 import { createGeminiProviderFromEnv, GeminiRequestError } from '../_shared/ai/gemini-provider.ts';
 import { checkOutputSafety, SAFE_FALLBACK_MESSAGE } from '../_shared/ai/output-safety.ts';
+import { createPostHogClient, type PostHogClient } from '../_shared/observability/posthog.ts';
 
 const bodySchema = z.object({
   plan_type: planTypeSchema,
@@ -179,8 +180,9 @@ export async function generateAiPlan(deps: {
   readonly aiProvider: AiProvider;
   readonly planType: PlanType;
   readonly regenerateReason: RegenerationReason | null;
+  readonly analytics: PostHogClient;
 }): Promise<PlanGenerateResponse> {
-  const { userDb, serviceDb, aiProvider, planType, regenerateReason } = deps;
+  const { userDb, serviceDb, aiProvider, planType, regenerateReason, analytics } = deps;
 
   // Adjustment chips are scoped to the diet-plan regeneration action (§6 of
   // the source proposal names it "Adjust this week's plan", diet-specific) --
@@ -348,6 +350,13 @@ export async function generateAiPlan(deps: {
     }
   }
 
+  // Fire-and-forget, only once the write it describes has actually
+  // succeeded (same reasoning as payments-approve-intent's analytics call).
+  analytics.capture('ai_plan_generated', profile.id, {
+    plan_type: planType,
+    is_regeneration: existing !== null,
+  });
+
   return { plan: { text: planText } };
 }
 
@@ -369,6 +378,7 @@ export const handleAiPlanGenerate = defineEndpoint<
       aiProvider: cachedProvider,
       planType: ctx.body.plan_type,
       regenerateReason: ctx.body.regenerate_reason ?? null,
+      analytics: createPostHogClient(ctx.config.posthogApiKey, { host: ctx.config.posthogHost }),
     });
   },
 });

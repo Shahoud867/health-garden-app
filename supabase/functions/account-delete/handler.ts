@@ -23,6 +23,7 @@ import { defineEndpoint } from '../_shared/http/endpoint.ts';
 import { z } from '../_shared/deps.ts';
 import { Errors } from '../_shared/http/errors.ts';
 import { createServiceRoleClient } from '../_shared/auth/context.ts';
+import { createPostHogClient, type PostHogClient } from '../_shared/observability/posthog.ts';
 
 const bodySchema = z.object({
   // A deliberately unergonomic body shape for a deliberately irreversible
@@ -69,8 +70,9 @@ export async function deleteAccount(deps: {
   readonly userDb: UserRowClient;
   readonly serviceDb: AuditLogClient & AdminAuthClient;
   readonly authId: string;
+  readonly analytics: PostHogClient;
 }): Promise<AccountDeleteResponse> {
-  const { userDb, serviceDb, authId } = deps;
+  const { userDb, serviceDb, authId, analytics } = deps;
 
   const { data: profile, error: profileError } = await userDb.from('users').select('id').single();
   if (profileError !== null || profile === null) {
@@ -91,6 +93,11 @@ export async function deleteAccount(deps: {
     throw Errors.internal({ details: { step: 'delete_auth_user', message: deleteError.message } });
   }
 
+  // After the fact, on the id that -- unlike authId -- audit_log itself
+  // still references post-cascade (see module doc). Fire-and-forget: never
+  // the reason a real deletion fails.
+  analytics.capture('account_deleted', profile.id);
+
   return { deleted: true };
 }
 
@@ -104,6 +111,11 @@ export const handleAccountDelete = defineEndpoint<
   bodySchema,
   handler: (ctx) => {
     const serviceDb = createServiceRoleClient(ctx.config);
-    return deleteAccount({ userDb: ctx.auth!.db, serviceDb, authId: ctx.auth!.authId });
+    return deleteAccount({
+      userDb: ctx.auth!.db,
+      serviceDb,
+      authId: ctx.auth!.authId,
+      analytics: createPostHogClient(ctx.config.posthogApiKey, { host: ctx.config.posthogHost }),
+    });
   },
 });

@@ -3,12 +3,23 @@ import { AppError } from '../_shared/http/errors.ts';
 import { SAFE_FALLBACK_MESSAGE } from '../_shared/ai/output-safety.ts';
 import { GeminiRequestError } from '../_shared/ai/gemini-provider.ts';
 import type { AiProvider, PlanRequest, UserContext } from '../_shared/ai/provider.ts';
+import type { PostHogClient } from '../_shared/observability/posthog.ts';
 import {
   generateAiPlan,
   type PlanGenerateResponse,
   type PlanServiceClient,
   type PlanUserClient,
 } from './handler.ts';
+
+function fakeAnalytics(
+  captured: { event: string; distinctId: string; properties?: Record<string, unknown> }[] = [],
+): PostHogClient {
+  return {
+    capture: (event, distinctId, properties) => {
+      captured.push({ event, distinctId, properties });
+    },
+  };
+}
 
 interface Options {
   isPremium?: boolean;
@@ -166,16 +177,32 @@ async function run(
   options: Options,
   planType: 'diet' | 'workout' = 'diet',
   regenerateReason: PlanRequest['adjustmentReason'] = null,
-): Promise<{ result: PlanGenerateResponse; writes: Writes }> {
+): Promise<
+  {
+    result: PlanGenerateResponse;
+    writes: Writes;
+    analyticsCaptured: {
+      event: string;
+      distinctId: string;
+      properties?: Record<string, unknown>;
+    }[];
+  }
+> {
   const writes: Writes = { inserted: [], updated: [], generateCalled: false };
+  const analyticsCaptured: {
+    event: string;
+    distinctId: string;
+    properties?: Record<string, unknown>;
+  }[] = [];
   const result = await generateAiPlan({
     userDb: fakeUserDb(options),
     serviceDb: fakeServiceDb(options, writes),
     aiProvider: fakeProvider(options, writes),
     planType,
     regenerateReason,
+    analytics: fakeAnalytics(analyticsCaptured),
   });
-  return { result, writes };
+  return { result, writes, analyticsCaptured };
 }
 
 Deno.test('generateAiPlan', async (t) => {
@@ -189,6 +216,7 @@ Deno.test('generateAiPlan', async (t) => {
           aiProvider: fakeProvider({}, writes),
           planType: 'diet',
           regenerateReason: null,
+          analytics: fakeAnalytics(),
         }),
       AppError,
     );
@@ -213,7 +241,7 @@ Deno.test('generateAiPlan', async (t) => {
   });
 
   await t.step('generates and inserts a new diet plan when none exists this period', async () => {
-    const { result, writes } = await run({ existingPlan: null }, 'diet');
+    const { result, writes, analyticsCaptured } = await run({ existingPlan: null }, 'diet');
     assertEquals(result.plan.text, 'Day 1: eat well.');
     assertEquals(writes.inserted.length, 1);
     assertEquals(writes.inserted[0]?.regenerations_used, 0);
@@ -222,6 +250,13 @@ Deno.test('generateAiPlan', async (t) => {
     assertEquals(writes.updated.length, 0);
     assertEquals(writes.planRequest?.candidateRecipes.length, 1);
     assertEquals(writes.planRequest?.candidateExercises.length, 0);
+    assertEquals(analyticsCaptured, [
+      {
+        event: 'ai_plan_generated',
+        distinctId: 'user-1',
+        properties: { plan_type: 'diet', is_regeneration: false },
+      },
+    ]);
   });
 
   await t.step('generates a workout plan using exercise candidates, not recipes', async () => {
@@ -233,7 +268,7 @@ Deno.test('generateAiPlan', async (t) => {
   });
 
   await t.step('regenerates and updates when under the regeneration cap', async () => {
-    const { writes } = await run(
+    const { writes, analyticsCaptured } = await run(
       { existingPlan: { id: 7, regenerations_used: 1 }, regenerationsCap: 2 },
       'diet',
       'too_repetitive',
@@ -244,6 +279,7 @@ Deno.test('generateAiPlan', async (t) => {
     const updatedRow = writes.updated[0]?.row as { regenerations_used: number };
     assertEquals(updatedRow.regenerations_used, 2);
     assertEquals(writes.planRequest?.adjustmentReason, 'too_repetitive');
+    assertEquals(analyticsCaptured[0]?.properties?.is_regeneration, true);
   });
 
   await t.step('rejects a regenerate_reason when there is no existing plan to adjust', async () => {
@@ -267,6 +303,7 @@ Deno.test('generateAiPlan', async (t) => {
           aiProvider: fakeProvider({}, writes),
           planType: 'diet',
           regenerateReason: null,
+          analytics: fakeAnalytics(),
         }),
       AppError,
     );
@@ -284,6 +321,7 @@ Deno.test('generateAiPlan', async (t) => {
           aiProvider: fakeProvider({ generateThrows: true }, writes),
           planType: 'diet',
           regenerateReason: null,
+          analytics: fakeAnalytics(),
         }),
       AppError,
     );
