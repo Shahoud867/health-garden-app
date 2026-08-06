@@ -107,8 +107,8 @@ describe('RLS isolation', () => {
     const { error } = await userA.client.from('permanent_garden').insert({
       user_id: userA.userId,
       plant_type: 'mint',
-      week_completed: '2026-01-01',
-      final_stage_reached: 3,
+      slot_index: 0,
+      completed_on: '2026-01-01',
     });
 
     expect(error).not.toBeNull();

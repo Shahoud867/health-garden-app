@@ -13,10 +13,21 @@
  * `TURNSTILE_SECRET_KEY` in `_shared/security/turnstile.ts`.
  */
 
-import type { AiProvider, PlanContent, UserContext, UserProfile } from './provider.ts';
+import type { AiProvider, PlanContent, PlanRequest, UserContext } from './provider.ts';
 import { buildChatSystemPrompt, buildPlanSystemPrompt } from './system-prompt.ts';
+import { buildPlanUserPrompt, maxOutputTokensFor } from './plan-prompt.ts';
 
-const DEFAULT_MODEL = 'gemini-2.0-flash';
+const CHAT_MAX_OUTPUT_TOKENS = 512;
+
+// gemini-2.0-flash was retired 1 June 2026 (Google's deprecations page);
+// gemini-3.5-flash is the current recommended replacement. This is a plain
+// config default — GEMINI_MODEL always wins when set (createGeminiProviderFromEnv,
+// below) — but the default itself must not be a dead model, since a dead
+// model here means every environment that forgets to set GEMINI_MODEL is
+// silently broken (chat degrades to a templated fallback with no error;
+// ai-plan-generate fails loudly). Re-verify this default whenever Google
+// publishes a new deprecation: https://ai.google.dev/gemini-api/docs/deprecations
+const DEFAULT_MODEL = 'gemini-3.5-flash';
 const REQUEST_TIMEOUT_MS = 10_000; // Blueprint §2.13/§4.10
 
 /** Thrown on any failure to reach Gemini or parse its response — the one
@@ -43,16 +54,24 @@ export class GeminiProvider implements AiProvider {
   ) {}
 
   chat(message: string, context: UserContext): Promise<string> {
-    return this.generateText(buildChatSystemPrompt(context), message);
+    return this.generateText(buildChatSystemPrompt(context), message, CHAT_MAX_OUTPUT_TOKENS);
   }
 
-  async generatePlan(profile: UserProfile): Promise<PlanContent> {
-    const prompt = buildPlanPrompt(profile);
-    const text = await this.generateText(buildPlanSystemPrompt(), prompt);
+  async generatePlan(request: PlanRequest): Promise<PlanContent> {
+    const prompt = buildPlanUserPrompt(request);
+    const text = await this.generateText(
+      buildPlanSystemPrompt(),
+      prompt,
+      maxOutputTokensFor(request.planType),
+    );
     return { text, generatedWith: `gemini:${this.model}` };
   }
 
-  private async generateText(systemPrompt: string, userMessage: string): Promise<string> {
+  private async generateText(
+    systemPrompt: string,
+    userMessage: string,
+    maxOutputTokens: number,
+  ): Promise<string> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
@@ -66,7 +85,7 @@ export class GeminiProvider implements AiProvider {
           body: JSON.stringify({
             systemInstruction: { parts: [{ text: systemPrompt }] },
             contents: [{ role: 'user', parts: [{ text: userMessage }] }],
-            generationConfig: { maxOutputTokens: 512, temperature: 0.6 },
+            generationConfig: { maxOutputTokens, temperature: 0.6 },
           }),
         },
       );
@@ -88,26 +107,6 @@ export class GeminiProvider implements AiProvider {
       clearTimeout(timeout);
     }
   }
-}
-
-function buildPlanPrompt(profile: UserProfile): string {
-  const parts = [
-    `Goal: ${profile.goal ?? 'not specified'}`,
-    `Activity level: ${profile.activityLevel ?? 'not specified'}`,
-    `Conditions to be mindful of (not to diagnose): ${
-      profile.conditions.join(', ') || 'none noted'
-    }`,
-    profile.dailyCalorieTarget !== null
-      ? `Daily calorie target: ${profile.dailyCalorieTarget}`
-      : null,
-    profile.dailyProteinTargetG !== null
-      ? `Daily protein target: ${profile.dailyProteinTargetG}g`
-      : null,
-  ].filter((line): line is string => line !== null);
-
-  return `Write a simple, encouraging 7-day meal and movement outline for this person, using locally available Pakistani foods where possible. Keep it practical, not clinical.\n\n${
-    parts.join('\n')
-  }`;
 }
 
 /** Reads GEMINI_API_KEY/GEMINI_MODEL from the ambient environment — the

@@ -4,15 +4,19 @@
  * database suite becomes non-hermetic.
  *
  * Phase 6 registered real, live pg_cron jobs (migration 0011). Once they
- * exist, the suite is no longer hermetic on its own: 'weekly-garden-archival'
- * calls the exact same archive_and_reset_stale_garden_rows() function
- * weekly-archive.test.ts calls manually, and if the cron schedule happens to
- * fire during a CI run, it can process the same stale row an assertion is
- * about to check, producing an extra permanent_garden row nothing in the
- * test itself caused. Unscheduling all four jobs for the duration of the
- * run removes that non-determinism; `teardown` restores them afterward from
- * a snapshot taken before unscheduling, rather than hardcoding the schedule
- * strings a second time (which would drift from migration 0011 silently).
+ * exist, the suite is no longer hermetic on its own: a job firing mid-run
+ * could touch rows an assertion is about to check. Unscheduling all jobs for
+ * the duration of the run removes that non-determinism; `teardown` restores
+ * them afterward from a snapshot taken before unscheduling, rather than
+ * hardcoding the schedule strings a second time (which would drift from
+ * migration 0011 silently).
+ *
+ * 'weekly-garden-archival' was the original motivating case (it called the
+ * same function weekly-archive.test.ts exercised manually) but garden
+ * mechanic v2 (docs/adr/0026) replaced it with event-driven planting inside
+ * sync_garden_state, so that job no longer exists -- this mechanism is kept
+ * because the remaining three jobs (engagement-nudge, gemini-quota-watchdog,
+ * payment-reconciliation) still pose the identical hazard.
  */
 
 import { writeFileSync, readFileSync, existsSync, unlinkSync } from 'node:fs';
@@ -20,12 +24,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import pg from 'pg';
 
-const JOB_NAMES = [
-  'weekly-garden-archival',
-  'engagement-nudge',
-  'gemini-quota-watchdog',
-  'payment-reconciliation',
-];
+const JOB_NAMES = ['engagement-nudge', 'gemini-quota-watchdog', 'payment-reconciliation'];
 
 const SNAPSHOT_PATH = join(tmpdir(), 'health-garden-cron-jobs-snapshot.json');
 
@@ -74,10 +73,12 @@ export async function teardown(): Promise<void> {
       // The command each job runs is fixed and known (this is the same set
       // migration 0011 defines) -- re-registering by name/schedule/command
       // is restoring the migration's own state, not inventing new behavior.
-      const command =
-        job.jobname === 'weekly-garden-archival'
-          ? 'SELECT archive_and_reset_stale_garden_rows();'
-          : `SELECT invoke_edge_function('${job.jobname === 'engagement-nudge' ? 'notify-inactive-users' : job.jobname}');`;
+      // All three remaining jobs invoke an Edge Function; only the name
+      // differs, and 'engagement-nudge' is the one whose job name doesn't
+      // match its target function name (notify-inactive-users).
+      const targetFunction =
+        job.jobname === 'engagement-nudge' ? 'notify-inactive-users' : job.jobname;
+      const command = `SELECT invoke_edge_function('${targetFunction}');`;
       await client.query('SELECT cron.schedule($1, $2, $3)', [job.jobname, job.schedule, command]);
     }
   } finally {

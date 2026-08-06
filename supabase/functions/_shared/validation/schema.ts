@@ -73,6 +73,37 @@ export const conditionSchema = z.enum([
   'pregnancy',
 ]);
 
+/** A user's own health/fitness goal (Blueprint, garden mechanic v2) — a
+ * closed set matching the `users.goal` CHECK constraint (migration 0003).
+ * The garden's primary-goal plant and AI plan generation both branch on
+ * this value, so an unrecognised string must be rejected at the edge, not
+ * merely silently fail every downstream rule. */
+export const userGoalSchema = z.enum([
+  'lose_weight',
+  'maintain',
+  'gain_weight',
+  'build_muscle',
+  'general_health',
+]);
+
+/** AI plan type (docs/adr/0027-ai-plan-retrieval-grounding.md) — a diet plan
+ * is weekly, a workout plan is monthly (ai_plans.period_kind, migration
+ * 0007). */
+export const planTypeSchema = z.enum(['diet', 'workout']);
+
+/** The fixed regeneration reasons a user can pick when tapping "Adjust this
+ * plan" — a closed enum, never free text, so the chip itself cannot carry a
+ * prompt injection the way an open "tell the AI what to change" box could
+ * (docs/adr/0027-ai-plan-retrieval-grounding.md, §6). */
+export const regenerationReasonSchema = z.enum([
+  'too_repetitive',
+  'too_expensive',
+  'no_time_to_cook',
+  'want_more_protein',
+  'too_much_dairy',
+  'make_it_lighter',
+]);
+
 /** Positive quantity with two decimals, matching `DECIMAL(6,2)` in the schema. */
 export const quantitySchema = z
   .number()
@@ -94,4 +125,7 @@ export type MealSlot = z.infer<typeof mealSlotSchema>;
 export type LogSource = z.infer<typeof logSourceSchema>;
 export type GoalType = z.infer<typeof goalTypeSchema>;
 export type Condition = z.infer<typeof conditionSchema>;
+export type UserGoal = z.infer<typeof userGoalSchema>;
+export type PlanType = z.infer<typeof planTypeSchema>;
+export type RegenerationReason = z.infer<typeof regenerationReasonSchema>;
 export type Pagination = z.infer<typeof paginationSchema>;

@@ -11,7 +11,11 @@
 export interface GardenHighlight {
   readonly goalType: string;
   readonly plantType: string;
-  readonly daysSucceededThisWeek: number;
+  /** Qualifying days into the plant's current growth cycle (0-2 — garden
+   * mechanic v2, migration 0005): reaching 3 is a graduation event, not a
+   * value this ever persists as, so 2 is the best in-progress value there
+   * is. Replaces the old weekly 0-7 days_succeeded_this_week. */
+  readonly currentStage: number;
 }
 
 const GOAL_LABELS: Record<string, string> = {
@@ -22,25 +26,28 @@ const GOAL_LABELS: Record<string, string> = {
   consistency: 'consistency',
 };
 
-/** Picks the best-performing goal this week and applies the roadmap §7.2
- * template — the same message a free-tier user would see, since a timed-out
- * premium call should degrade to exactly that experience, not a worse one. */
+/** Picks the plant furthest into its current cycle and applies the roadmap
+ * §7.2 template — the same message a free-tier user would see, since a
+ * timed-out premium call should degrade to exactly that experience, not a
+ * worse one. Thresholds are scaled to the 0-2 in-progress range (garden
+ * mechanic v2): 2 is "one qualifying day from a new plant", not a mid-range
+ * value the way 6/7 was under the old weekly scale. */
 export function buildFallbackMessage(highlights: readonly GardenHighlight[]): string {
   if (highlights.length === 0) {
     return "We couldn't reach your coach just now, but every log helps your garden grow — try logging something today.";
   }
 
   const best = highlights.reduce((top, current) =>
-    current.daysSucceededThisWeek > top.daysSucceededThisWeek ? current : top
+    current.currentStage > top.currentStage ? current : top
   );
   const goalName = GOAL_LABELS[best.goalType] ?? best.goalType;
-  const days = best.daysSucceededThisWeek;
+  const stage = best.currentStage;
 
-  if (days >= 6) {
-    return `We couldn't reach your coach just now, but you're doing great: you hit your ${goalName} goal ${days}/7 days this week — your ${best.plantType} is thriving.`;
+  if (stage >= 2) {
+    return `We couldn't reach your coach just now, but you're doing great: one more day of ${goalName} and your ${best.plantType} is fully grown.`;
   }
-  if (days >= 3) {
-    return `We couldn't reach your coach just now. Good progress on ${goalName} — ${days}/7 days this week. Keep it up.`;
+  if (stage >= 1) {
+    return `We couldn't reach your coach just now. Good progress on ${goalName} — keep it up and your ${best.plantType} will keep growing.`;
   }
-  return `We couldn't reach your coach just now. Your ${best.plantType} is still small — try logging ${goalName} today to help it grow.`;
+  return `We couldn't reach your coach just now. Your ${best.plantType} is just getting started — try logging ${goalName} today to help it grow.`;
 }

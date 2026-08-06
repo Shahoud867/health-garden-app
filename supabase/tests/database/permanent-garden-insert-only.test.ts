@@ -21,8 +21,8 @@ describe('permanent_garden insert-only guarantee (§5.4)', () => {
       .insert({
         user_id: user.userId,
         plant_type: 'mint',
-        week_completed: '2026-01-01',
-        final_stage_reached: 2,
+        slot_index: 0,
+        completed_on: '2026-01-01',
       })
       .select('id')
       .single();
@@ -30,7 +30,7 @@ describe('permanent_garden insert-only guarantee (§5.4)', () => {
 
     const { error: updateError } = await serviceRoleClient
       .from('permanent_garden')
-      .update({ final_stage_reached: 3 })
+      .update({ slot_index: 1 })
       .eq('id', inserted!.id);
     expect(updateError).not.toBeNull();
     expect(updateError?.message).toMatch(/insert-only/i);

@@ -1,8 +1,13 @@
 -- Background processing (Blueprint §4.6, §2.7) -- pg_cron for every
 -- scheduled job, pg_net for the three that need to reach an Edge Function
--- (anything needing an external API); the weekly garden archival needs
--- neither, since archive_and_reset_stale_garden_rows() (migration 0005) is
--- a pure SQL function called directly.
+-- (anything needing an external API).
+--
+-- A weekly garden-archival job originally lived here, calling
+-- archive_and_reset_stale_garden_rows() directly (no Edge Function/pg_net
+-- needed for a pure SQL call). Garden mechanic v2 (docs/adr/0026) replaced
+-- weekly archival with event-driven planting inside sync_garden_state
+-- (migration 0005) -- a plant is archived the moment it fully grows, not on
+-- a Monday sweep -- so that function and this cron entry are both gone.
 CREATE EXTENSION IF NOT EXISTS pg_cron WITH SCHEMA extensions;
 CREATE EXTENSION IF NOT EXISTS pg_net WITH SCHEMA extensions;
 
@@ -75,12 +80,6 @@ REVOKE EXECUTE ON FUNCTION invoke_edge_function(TEXT, JSONB) FROM PUBLIC, anon, 
 -- timezone setting, is not something verifiable without a live instance to
 -- test against.
 -- ============================================================
-
--- Monday 00:00 PKT = Sunday 19:00 UTC.
-SELECT cron.schedule(
-  'weekly-garden-archival', '0 19 * * 0',
-  $$ SELECT archive_and_reset_stale_garden_rows(); $$
-);
 
 -- Daily 18:00 PKT = 13:00 UTC.
 SELECT cron.schedule(

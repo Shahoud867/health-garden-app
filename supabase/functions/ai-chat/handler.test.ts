@@ -1,7 +1,7 @@
 import { assertEquals, assertRejects } from '@std/assert';
 import { AppError } from '../_shared/http/errors.ts';
 import { SAFE_FALLBACK_MESSAGE } from '../_shared/ai/output-safety.ts';
-import type { AiProvider, UserContext, UserProfile } from '../_shared/ai/provider.ts';
+import type { AiProvider, PlanRequest, UserContext } from '../_shared/ai/provider.ts';
 import {
   type ChatResponse,
   type ChatServiceClient,
@@ -18,7 +18,7 @@ interface Options {
   gardenRows?: readonly {
     goal_type: string;
     plant_type: string;
-    days_succeeded_this_week: number;
+    current_stage: number;
   }[];
   chatReply?: string;
   chatThrows?: boolean;
@@ -80,7 +80,7 @@ function fakeProvider(options: Options, calls: { chatCalled: boolean }): AiProvi
       if (options.chatThrows) return Promise.reject(new Error('Gemini timed out'));
       return Promise.resolve(options.chatReply ?? 'Here is some encouragement.');
     },
-    generatePlan: (_profile: UserProfile) =>
+    generatePlan: (_request: PlanRequest) =>
       Promise.resolve({ text: 'unused', generatedWith: 'test' }),
   };
 }
@@ -167,7 +167,7 @@ Deno.test('handleChatMessage', async (t) => {
   await t.step('degrades to a templated message when Gemini fails, never throwing', async () => {
     const { result } = await run({
       chatThrows: true,
-      gardenRows: [{ goal_type: 'hydration', plant_type: 'mint', days_succeeded_this_week: 6 }],
+      gardenRows: [{ goal_type: 'hydration', plant_type: 'mint', current_stage: 2 }],
     });
     assertEquals(result.reply.includes('mint'), true);
   });

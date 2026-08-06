@@ -21,11 +21,16 @@ function karachiToday(): string {
 }
 
 describe('pg_cron/pg_net background jobs (§4.6)', () => {
-  it('registered all four background jobs with their expected schedules', () => {
+  it('registered all three background jobs with their expected schedules', () => {
     // global-setup.ts unschedules every job for the run's duration (a live
     // job could otherwise fire mid-suite and process the same rows a test
     // is asserting about) -- it captures this exact snapshot first, so this
     // reads that rather than querying cron.job, which is empty by now.
+    //
+    // 'weekly-garden-archival' is deliberately absent: garden mechanic v2
+    // (docs/adr/0026) replaced it with event-driven planting inside
+    // sync_garden_state (migration 0005) -- there is no weekly sweep left to
+    // schedule.
     const snapshot = JSON.parse(readFileSync(cronJobsSnapshotPath(), 'utf-8')) as {
       jobname: string;
       schedule: string;
@@ -35,7 +40,6 @@ describe('pg_cron/pg_net background jobs (§4.6)', () => {
       { jobname: 'engagement-nudge', schedule: '0 13 * * *' },
       { jobname: 'gemini-quota-watchdog', schedule: '*/30 * * * *' },
       { jobname: 'payment-reconciliation', schedule: '0 4 * * *' },
-      { jobname: 'weekly-garden-archival', schedule: '0 19 * * 0' },
     ]);
   });
 });

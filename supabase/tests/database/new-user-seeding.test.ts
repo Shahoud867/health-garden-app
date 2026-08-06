@@ -14,7 +14,7 @@ describe('new-user seeding (handle_new_auth_user, seed_garden_state_for_new_user
 
     const { data, error } = await user.client
       .from('garden_state')
-      .select('goal_type, plant_type, current_stage, days_succeeded_this_week')
+      .select('goal_type, plant_type, current_stage, cycle_started_on')
       .eq('user_id', user.userId)
       .order('goal_type');
 
@@ -30,7 +30,10 @@ describe('new-user seeding (handle_new_auth_user, seed_garden_state_for_new_user
 
     for (const row of data ?? []) {
       expect(row.current_stage).toBe(0);
-      expect(row.days_succeeded_this_week).toBe(0);
+      // Seeded with a fresh cycle starting today (migration 0005) -- not
+      // asserting an exact date (timezone-sensitive, §5.10), just that it's
+      // a real, non-null date every plant got at signup.
+      expect(row.cycle_started_on).not.toBeNull();
     }
   });
 

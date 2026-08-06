@@ -46,7 +46,7 @@ interface ProfileRow {
 interface GardenRow {
   readonly goal_type: string;
   readonly plant_type: string;
-  readonly days_succeeded_this_week: number;
+  readonly current_stage: number;
 }
 
 /** A single, non-overloaded `from(table: string)` shape (rather than
@@ -74,9 +74,9 @@ export interface ChatServiceClient extends AppConfigClient {
 function summarizeHighlights(highlights: readonly GardenHighlight[]): string {
   if (highlights.length === 0) return 'no logs yet';
   const best = highlights.reduce((top, current) =>
-    current.daysSucceededThisWeek > top.daysSucceededThisWeek ? current : top
+    current.currentStage > top.currentStage ? current : top
   );
-  return `${best.goalType}: ${best.daysSucceededThisWeek}/7 days this week`;
+  return `${best.goalType}: ${best.currentStage}/3 days into their current ${best.plantType}`;
 }
 
 /**
@@ -126,7 +126,7 @@ export async function handleChatMessage(deps: {
 
   const { data: gardenRows, error: gardenError } = await userDb
     .from('garden_state')
-    .select('goal_type, plant_type, days_succeeded_this_week');
+    .select('goal_type, plant_type, current_stage');
   if (gardenError !== null) {
     throw Errors.internal({ details: { step: 'read_garden_state', message: gardenError.message } });
   }
@@ -134,7 +134,7 @@ export async function handleChatMessage(deps: {
     (row) => ({
       goalType: row.goal_type,
       plantType: row.plant_type,
-      daysSucceededThisWeek: row.days_succeeded_this_week,
+      currentStage: row.current_stage,
     }),
   );
 

@@ -7,7 +7,7 @@ Deno.test('each error maps to its documented HTTP status', () => {
   assertEquals(Errors.upgradeRequired().httpStatus, 403);
   assertEquals(Errors.notFound().httpStatus, 404);
   assertEquals(Errors.methodNotAllowed().httpStatus, 405);
-  assertEquals(Errors.alreadyGeneratedThisWeek().httpStatus, 409);
+  assertEquals(Errors.planRegenerationCapReached().httpStatus, 409);
   assertEquals(Errors.dailyCapReached().httpStatus, 429);
   assertEquals(Errors.upstreamUnavailable().httpStatus, 503);
   assertEquals(Errors.internal().httpStatus, 500);

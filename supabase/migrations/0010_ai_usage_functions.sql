@@ -28,13 +28,21 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 -- caller the ai-chat Edge Function's own service-role client.
 REVOKE EXECUTE ON FUNCTION increment_daily_ai_usage(UUID) FROM PUBLIC, anon, authenticated;
 
--- The canonical "what week is it" used everywhere a weekly boundary matters
--- (garden_state.current_week_start, ai_plans.week_start) -- an Edge Function
--- must ask Postgres rather than recompute this in JS, or a client-side
+-- The canonical "what week/month is it" used wherever a calendar period
+-- boundary matters (ai_plans.period_start) -- an Edge Function must ask
+-- Postgres rather than recompute this in JS, or a client-side
 -- timezone/DST assumption could silently drift from the Asia/Karachi
 -- boundary the rest of the schema is pinned to (§5.10, G-16). Read-only and
--- non-sensitive (it reveals nothing but the calendar), so it carries no
+-- non-sensitive (it reveals nothing but the calendar), so neither carries a
 -- REVOKE unlike the functions above.
 CREATE OR REPLACE FUNCTION current_week_start() RETURNS DATE AS $$
   SELECT date_trunc('week', CURRENT_DATE)::DATE;
+$$ LANGUAGE sql STABLE;
+
+-- Diet plans are weekly (current_week_start); workout plans are monthly
+-- (AI plan retrieval-grounding round) -- one call/user/month is cheap enough
+-- on the request-per-day-bound free tier that a full calendar month, not a
+-- rolling 30 days, is the simpler and more predictable period.
+CREATE OR REPLACE FUNCTION current_month_start() RETURNS DATE AS $$
+  SELECT date_trunc('month', CURRENT_DATE)::DATE;
 $$ LANGUAGE sql STABLE;

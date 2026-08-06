@@ -7,32 +7,32 @@ Deno.test('buildFallbackMessage', async (t) => {
     assertStringIncludes(message, "couldn't reach your coach");
   });
 
-  await t.step('celebrates a high-stage goal (>= 6 days)', () => {
+  await t.step('celebrates a plant one day from fully grown (stage 2)', () => {
     const message = buildFallbackMessage([
-      { goalType: 'hydration', plantType: 'mint', daysSucceededThisWeek: 6 },
+      { goalType: 'hydration', plantType: 'mint', currentStage: 2 },
     ]);
-    assertStringIncludes(message, '6/7 days');
+    assertStringIncludes(message, 'one more day');
     assertStringIncludes(message, 'mint');
   });
 
-  await t.step('encourages continued progress (3-5 days)', () => {
+  await t.step('encourages continued progress (stage 1)', () => {
     const message = buildFallbackMessage([
-      { goalType: 'protein', plantType: 'wheat_stalk', daysSucceededThisWeek: 4 },
+      { goalType: 'protein', plantType: 'wheat_stalk', currentStage: 1 },
     ]);
     assertStringIncludes(message, 'Good progress on protein');
   });
 
-  await t.step('gently nudges on low activity (< 3 days)', () => {
+  await t.step('gently nudges on a freshly started cycle (stage 0)', () => {
     const message = buildFallbackMessage([
-      { goalType: 'movement', plantType: 'sapling', daysSucceededThisWeek: 1 },
+      { goalType: 'movement', plantType: 'sapling', currentStage: 0 },
     ]);
-    assertStringIncludes(message, 'still small');
+    assertStringIncludes(message, 'just getting started');
   });
 
-  await t.step('picks the best-performing goal across multiple', () => {
+  await t.step('picks the plant furthest into its cycle across multiple', () => {
     const message = buildFallbackMessage([
-      { goalType: 'movement', plantType: 'sapling', daysSucceededThisWeek: 1 },
-      { goalType: 'hydration', plantType: 'mint', daysSucceededThisWeek: 6 },
+      { goalType: 'movement', plantType: 'sapling', currentStage: 0 },
+      { goalType: 'hydration', plantType: 'mint', currentStage: 2 },
     ]);
     assertStringIncludes(message, 'mint');
     assertEquals(message.includes('sapling'), false);

@@ -29,8 +29,11 @@ export const ErrorCode = {
   UPGRADE_REQUIRED: 'upgrade_required',
   /** Daily AI coaching cap exhausted (Blueprint §5.2, ADR-003). */
   DAILY_CAP_REACHED: 'daily_cap_reached',
-  /** Weekly AI plan already generated (Blueprint §6.2). */
-  ALREADY_GENERATED_THIS_WEEK: 'already_generated_this_week',
+  /** AI plan already generated for this period, and its regeneration
+   * allowance is used up (Blueprint §6.2). Covers both the weekly diet plan
+   * and the monthly workout plan — "this week" was diet-plan-specific
+   * phrasing from before plans had a plan_type. */
+  PLAN_REGENERATION_CAP_REACHED: 'plan_regeneration_cap_reached',
   /** Feature disabled at runtime via `app_config` kill switch (ADR-010). */
   FEATURE_DISABLED: 'feature_disabled',
   /** Requested resource does not exist or is not visible to this caller. */
@@ -56,7 +59,7 @@ const ERROR_STATUS: Readonly<Record<ErrorCode, number>> = Object.freeze({
   [ErrorCode.FORBIDDEN]: 403,
   [ErrorCode.UPGRADE_REQUIRED]: 403,
   [ErrorCode.DAILY_CAP_REACHED]: 429,
-  [ErrorCode.ALREADY_GENERATED_THIS_WEEK]: 409,
+  [ErrorCode.PLAN_REGENERATION_CAP_REACHED]: 409,
   [ErrorCode.FEATURE_DISABLED]: 503,
   [ErrorCode.NOT_FOUND]: 404,
   [ErrorCode.METHOD_NOT_ALLOWED]: 405,
@@ -80,8 +83,8 @@ const DEFAULT_MESSAGE: Readonly<Record<ErrorCode, string>> = Object.freeze({
   [ErrorCode.UPGRADE_REQUIRED]:
     'This is a premium feature. Upgrade to unlock AI coaching and weekly plans.',
   [ErrorCode.DAILY_CAP_REACHED]: "You've reached today's coaching limit — chat again tomorrow.",
-  [ErrorCode.ALREADY_GENERATED_THIS_WEEK]:
-    'Your plan for this week is already ready. You can generate a new one next week.',
+  [ErrorCode.PLAN_REGENERATION_CAP_REACHED]:
+    "Your plan for this period is ready, and you've used up your regenerations. You can generate a new one next period.",
   [ErrorCode.FEATURE_DISABLED]:
     'This feature is temporarily unavailable. Everything else still works.',
   [ErrorCode.NOT_FOUND]: 'We could not find what you were looking for.',
@@ -163,8 +166,8 @@ export const Errors = {
     new AppError(ErrorCode.UPGRADE_REQUIRED, options),
   dailyCapReached: (options?: ErrorOptions): AppError =>
     new AppError(ErrorCode.DAILY_CAP_REACHED, options),
-  alreadyGeneratedThisWeek: (options?: ErrorOptions): AppError =>
-    new AppError(ErrorCode.ALREADY_GENERATED_THIS_WEEK, options),
+  planRegenerationCapReached: (options?: ErrorOptions): AppError =>
+    new AppError(ErrorCode.PLAN_REGENERATION_CAP_REACHED, options),
   featureDisabled: (options?: ErrorOptions): AppError =>
     new AppError(ErrorCode.FEATURE_DISABLED, options),
   notFound: (options?: ErrorOptions): AppError => new AppError(ErrorCode.NOT_FOUND, options),

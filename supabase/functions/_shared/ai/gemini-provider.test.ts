@@ -1,5 +1,25 @@
 import { assertEquals, assertRejects, assertStringIncludes } from '@std/assert';
 import { GeminiProvider, GeminiRequestError } from './gemini-provider.ts';
+import type { PlanRequest } from './provider.ts';
+
+const dietPlanRequest: PlanRequest = {
+  planType: 'diet',
+  periodDays: 7,
+  goal: 'lose_weight',
+  conditions: [],
+  activityLevel: 'moderate',
+  dailyCalorieTarget: 1800,
+  dailyProteinTargetG: 90,
+  mealsPerDay: 3,
+  workoutDaysPerWeek: 3,
+  workoutSessionMinutes: 30,
+  recentActivity: { avgDailyCalories: null, workoutDaysLast14: null, latestWeightKg: null },
+  candidateRecipes: [
+    { id: 1, name: 'Daal Chawal', urduName: null, calories: 400, proteinG: 15, costPkr: null },
+  ],
+  candidateExercises: [],
+  adjustmentReason: null,
+};
 
 function fakeFetch(body: unknown, ok = true, status = 200): typeof fetch {
   return (() =>
@@ -86,13 +106,7 @@ Deno.test('GeminiProvider.generatePlan', async (t) => {
       fakeFetch({ candidates: [{ content: { parts: [{ text: 'Day 1: ...' }] } }] }),
     );
 
-    const plan = await provider.generatePlan({
-      goal: 'weight_loss',
-      conditions: [],
-      activityLevel: 'moderate',
-      dailyCalorieTarget: 1800,
-      dailyProteinTargetG: 90,
-    });
+    const plan = await provider.generatePlan(dietPlanRequest);
 
     assertEquals(plan.text, 'Day 1: ...');
     assertEquals(plan.generatedWith, 'gemini:gemini-2.0-flash');
