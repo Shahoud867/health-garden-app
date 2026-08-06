@@ -1,61 +1,39 @@
 import { assertEquals, assertRejects } from '@std/assert';
 import { AppError } from '../_shared/http/errors.ts';
-import { type SubmitIntentClient, submitPaymentIntent } from './handler.ts';
+import {
+  type AtomicSubmitClient,
+  type ProfileLookupClient,
+  submitPaymentIntent,
+} from './handler.ts';
 
 interface Options {
-  recentPendingCount?: number;
+  /** `null` simulates the atomic RPC finding the caller already at the
+   * limit (migration 0014's NULL-means-rate-limited contract). */
+  rpcResult?: number | null;
 }
 
-interface Writes {
-  inserted: Record<string, unknown>[];
+interface Calls {
+  rpcArgs: Record<string, unknown> | undefined;
 }
 
-type IntentQueryResult = {
-  data: readonly Record<string, unknown>[] | null;
-  error: { message: string } | null;
-};
-
-interface Chain {
-  eq(column: string, value: unknown): Chain;
-  gte(column: string, value: string): Promise<IntentQueryResult>;
-}
-
-function chainablePromise(result: IntentQueryResult): Promise<IntentQueryResult> & Chain {
-  const chain: Chain = {
-    eq: (_c: string, _v: unknown) => chain,
-    gte: (_c: string, _v: string) => Promise.resolve(result),
-  };
-  return Object.assign(Promise.resolve(result), chain);
-}
-
-function fakeUserDb(options: Options, writes: Writes): SubmitIntentClient {
+function fakeUserDb(): ProfileLookupClient {
   return {
-    from: (table: string) => {
-      if (table === 'users') {
-        return {
-          select: (_columns: string) => chainablePromise({ data: [{ id: 'user-1' }], error: null }),
-          insert: (_row: Record<string, unknown>) => ({
-            select: (_c: string) => ({
-              single: () => Promise.resolve({ data: null, error: { message: 'unused' } }),
-            }),
-          }),
-        };
-      }
-      // payment_intents
-      const pendingRows = Array.from({ length: options.recentPendingCount ?? 0 }, (_, i) => ({
-        id: i,
-      }));
-      return {
-        select: (_columns: string) => chainablePromise({ data: pendingRows, error: null }),
-        insert: (row: Record<string, unknown>) => {
-          writes.inserted.push(row);
-          return {
-            select: (_c: string) => ({
-              single: () => Promise.resolve({ data: { id: 42 }, error: null }),
-            }),
-          };
-        },
-      };
+    from: (_table: string) => ({
+      select: (_columns: string) => Promise.resolve({ data: [{ id: 'user-1' }], error: null }),
+    }),
+  };
+}
+
+function fakeServiceDb(options: Options, calls: Calls): AtomicSubmitClient {
+  // `'rpcResult' in options`, not `options.rpcResult ?? 42` -- the whole
+  // point of this fake is to distinguish "return null" (rate limited) from
+  // "unset" (default to a successful id), and `??` cannot tell an explicit
+  // `null` apart from an absent property.
+  const data = 'rpcResult' in options ? options.rpcResult! : 42;
+  return {
+    rpc: (_fn: string, args: Record<string, unknown>) => {
+      calls.rpcArgs = args;
+      return Promise.resolve({ data, error: null });
     },
   };
 }
@@ -89,11 +67,12 @@ Deno.test('submitPaymentIntent', async (t) => {
   await t.step(
     'rejects when Turnstile verification fails, before touching the database',
     async () => {
-      const writes: Writes = { inserted: [] };
+      const calls: Calls = { rpcArgs: undefined };
       const error = await assertRejects(
         () =>
           submitPaymentIntent({
-            userDb: fakeUserDb({}, writes),
+            userDb: fakeUserDb(),
+            serviceDb: fakeServiceDb({}, calls),
             turnstileSecretKey: 'secret',
             fetchImpl: fetchAlwaysFails(),
             body: validBody,
@@ -101,16 +80,17 @@ Deno.test('submitPaymentIntent', async (t) => {
         AppError,
       );
       assertEquals((error as AppError).code, 'forbidden');
-      assertEquals(writes.inserted.length, 0);
+      assertEquals(calls.rpcArgs, undefined);
     },
   );
 
-  await t.step('rejects once the 24h pending-submission rate limit is hit', async () => {
-    const writes: Writes = { inserted: [] };
+  await t.step('rejects once the atomic RPC reports the caller is over the limit', async () => {
+    const calls: Calls = { rpcArgs: undefined };
     const error = await assertRejects(
       () =>
         submitPaymentIntent({
-          userDb: fakeUserDb({ recentPendingCount: 3 }, writes),
+          userDb: fakeUserDb(),
+          serviceDb: fakeServiceDb({ rpcResult: null }, calls),
           turnstileSecretKey: 'secret',
           fetchImpl: fetchAlwaysSucceeds(),
           body: validBody,
@@ -118,23 +98,29 @@ Deno.test('submitPaymentIntent', async (t) => {
       AppError,
     );
     assertEquals((error as AppError).code, 'rate_limited');
-    assertEquals(writes.inserted.length, 0);
   });
 
   await t.step(
-    'creates a payment_intents row when under the rate limit and Turnstile passes',
+    'creates a payment_intents row via the atomic RPC when under the limit and Turnstile passes',
     async () => {
-      const writes: Writes = { inserted: [] };
+      const calls: Calls = { rpcArgs: undefined };
       const result = await submitPaymentIntent({
-        userDb: fakeUserDb({ recentPendingCount: 1 }, writes),
+        userDb: fakeUserDb(),
+        serviceDb: fakeServiceDb({ rpcResult: 42 }, calls),
         turnstileSecretKey: 'secret',
         fetchImpl: fetchAlwaysSucceeds(),
         body: validBody,
       });
       assertEquals(result, { intentId: 42, status: 'pending_review' });
-      assertEquals(writes.inserted.length, 1);
-      assertEquals(writes.inserted[0]?.user_id, 'user-1');
-      assertEquals(writes.inserted[0]?.amount_pkr, 500);
+      // The check-and-write happens inside one RPC call, not a separate
+      // count-then-insert -- this is the whole point of the fix (module doc).
+      assertEquals(calls.rpcArgs, {
+        p_user_id: 'user-1',
+        p_amount_pkr: 500,
+        p_method: 'jazzcash_manual',
+        p_reference: 'TXN123',
+        p_max_pending: 3,
+      });
     },
   );
 });
