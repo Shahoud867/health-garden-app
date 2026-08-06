@@ -34,11 +34,13 @@ export const QUICK_ACTIONS: QuickAction[] = [
   { id: 'suggest_foods', en: 'Suggest foods for today', ur: 'آج کے لیے کھانے تجویز کریں', countsAgainstChatCap: true },
 ]
 
+/** Keys match users.goal's CHECK constraint exactly. */
 const GOAL_LABEL: Record<string, { en: string; ur: string }> = {
-  lose: { en: 'losing weight steadily', ur: 'آہستہ آہستہ وزن کم کرنا' },
-  gain: { en: 'gaining weight steadily', ur: 'آہستہ آہستہ وزن بڑھانا' },
-  strength: { en: 'building strength', ur: 'طاقت بڑھانا' },
-  general: { en: 'staying healthy overall', ur: 'مجموعی صحت' },
+  lose_weight: { en: 'losing weight steadily', ur: 'آہستہ آہستہ وزن کم کرنا' },
+  gain_weight: { en: 'gaining weight steadily', ur: 'آہستہ آہستہ وزن بڑھانا' },
+  build_muscle: { en: 'building strength', ur: 'طاقت بڑھانا' },
+  maintain: { en: 'holding steady', ur: 'وزن برقرار رکھنا' },
+  general_health: { en: 'staying healthy overall', ur: 'مجموعی صحت' },
 }
 
 /** Gentle, non-diagnostic notes — these mirror the filters applied server-side. */
@@ -51,7 +53,7 @@ const CONDITION_NOTE: Record<string, { en: string; ur: string }> = {
     en: 'Higher-protein, lower-refined-carb options are favoured.',
     ur: 'زیادہ پروٹین اور کم میدہ والے کھانے ترجیح میں ہیں۔',
   },
-  joint: {
+  knee_pain: {
     en: 'Movement is kept low-impact and knee-friendly.',
     ur: 'ورزش گھٹنوں کے لیے نرم رکھی گئی ہے۔',
   },
@@ -83,7 +85,7 @@ export function quickActionPrompt(id: QuickActionId, lang: 'en' | 'ur'): string 
 }
 
 export function quickActionReply(id: QuickActionId, user: User, lang: 'en' | 'ur'): string {
-  const goal = pick(lang, GOAL_LABEL[user.goal] ?? GOAL_LABEL.general)
+  const goal = pick(lang, GOAL_LABEL[user.goal] ?? GOAL_LABEL.general_health)
   const notes = conditionLines(user, lang)
 
   if (id === 'diet_plan') {

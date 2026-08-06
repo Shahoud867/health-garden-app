@@ -24,7 +24,7 @@ type Step = typeof STEPS[number]
 const CONDITION_OPTIONS: { val: string; en: string; ur: string }[] = [
   { val: 'diabetes', en: t('conditionDiabetes', 'en'), ur: t('conditionDiabetes', 'ur') },
   { val: 'pcos', en: t('conditionPCOS', 'en'), ur: t('conditionPCOS', 'ur') },
-  { val: 'joint', en: t('conditionJoint', 'en'), ur: t('conditionJoint', 'ur') },
+  { val: 'knee_pain', en: t('conditionJoint', 'en'), ur: t('conditionJoint', 'ur') },
   { val: 'obesity', en: 'Obesity', ur: 'موٹاپا' },
   { val: 'hypertension', en: 'High blood pressure', ur: 'بلڈ پریشر' },
   { val: 'cholesterol', en: 'High cholesterol', ur: 'کولیسٹرول' },
@@ -62,8 +62,9 @@ export default function OnboardingScreen({ lang, navigate, onComplete }: Props) 
     const bmr = form.sex === 'male' ? 10 * w + 6.25 * h - 5 * a + 5 : 10 * w + 6.25 * h - 5 * a - 161
     const mult = { sedentary: 1.2, light: 1.375, moderate: 1.55, active: 1.725 }[form.activityLevel] || 1.375
     const base = bmr * mult
-    if (form.goal === 'lose') return Math.round(base - 500)
-    if (form.goal === 'strength') return Math.round(base + 200)
+    if (form.goal === 'lose_weight') return Math.round(base - 500)
+    if (form.goal === 'gain_weight') return Math.round(base + 400)
+    if (form.goal === 'build_muscle') return Math.round(base + 200)
     return Math.round(base)
   })()
 
@@ -82,7 +83,7 @@ export default function OnboardingScreen({ lang, navigate, onComplete }: Props) 
       heightCm: parseFloat(form.heightCm) || 165,
       weightKg: parseFloat(form.weightKg) || 65,
       activityLevel: form.activityLevel || 'moderate',
-      goal: form.goal || 'general',
+      goal: form.goal || 'general_health',
       // Free text replaces the 'other' marker so downstream code sees a real
       // condition rather than a placeholder value.
       conditions: form.conditions.flatMap((c) =>
@@ -246,10 +247,14 @@ export default function OnboardingScreen({ lang, navigate, onComplete }: Props) 
               />
               <div className="mt-6 space-y-3">
                 {[
-                  { val: 'lose', en: t('goalLose', 'en'), ur: t('goalLose', 'ur') },
+                  // Values match users.goal's CHECK constraint exactly -- the
+                  // garden's primary-goal plant branches on this string, so a
+                  // near-miss silently fails that plant every day.
+                  { val: 'lose_weight', en: t('goalLose', 'en'), ur: t('goalLose', 'ur') },
+                  { val: 'gain_weight', en: t('goalGain', 'en'), ur: t('goalGain', 'ur') },
                   { val: 'maintain', en: t('goalMaintain', 'en'), ur: t('goalMaintain', 'ur') },
-                  { val: 'strength', en: t('goalStrength', 'en'), ur: t('goalStrength', 'ur') },
-                  { val: 'general', en: t('goalGeneral', 'en'), ur: t('goalGeneral', 'ur') },
+                  { val: 'build_muscle', en: t('goalStrength', 'en'), ur: t('goalStrength', 'ur') },
+                  { val: 'general_health', en: t('goalGeneral', 'en'), ur: t('goalGeneral', 'ur') },
                 ].map((o) => optionButton(o.val, lang === 'ur' ? o.ur : o.en, form.goal === o.val, () => setForm({ ...form, goal: o.val })))}
               </div>
             </>

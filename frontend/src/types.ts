@@ -6,6 +6,7 @@ export type Screen =
   | 'garden' | 'garden-history'
   | 'ai-coach' | 'ai-plan'
   | 'premium' | 'profile'
+  | 'privacy' | 'terms' | 'about'
 
 export type Lang = 'en' | 'ur'
 export type SyncStatus = 'synced' | 'pending' | 'offline'
@@ -43,9 +44,21 @@ export interface PlantState {
   type: 'cactus' | 'sunflower' | 'bellflower' | 'bamboo' | 'succulent'
   goal: string
   goalUr: string
-  daysThisWeek: number
+  /**
+   * Qualifying days completed in this plant's current growth cycle.
+   *
+   * Growth is per-qualifying-day, not weekly: each day the habit is met the
+   * plant advances one stage, and on the third it is planted into the
+   * permanent garden and a fresh cycle starts. Mirrors garden_state's
+   * `current_stage` (0-2 in practice -- 3 is the graduation event and is
+   * never stored).
+   */
+  cycleDays: 0 | 1 | 2
   metToday: boolean
 }
+
+/** Qualifying days needed to fully grow one plant (garden mechanic v2). */
+export const CYCLE_LENGTH = 3
 
 export interface AppState {
   lang: Lang
@@ -111,7 +124,7 @@ const S = {
     forgotPassword: 'Forgot password?', orContinue: 'or continue with',
     google: 'Continue with Google',
     greeting: 'Good morning', greetingEvening: 'Good evening',
-    daysThisWeek: 'days this week', moreToGrow: 'more to grow',
+    daysThisWeek: 'days this cycle', moreToGrow: 'more to grow',
     restingLabel: 'Resting today', fullyGrown: 'Fully grown this week',
     shareGarden: 'Share garden', viewHistory: 'View garden history',
     mint: 'Hydration', cactus: 'Sugar-free', bamboo: 'Protein',
@@ -140,7 +153,7 @@ const S = {
     actSedentary: 'Mostly seated', actLight: 'Light movement most days',
     actModerate: 'Moderately active', actVery: 'Very active',
     goalLose: 'Lose weight', goalMaintain: 'Stay at current weight',
-    goalStrength: 'Build strength', goalGeneral: 'General health',
+    goalStrength: 'Build strength', goalGeneral: 'General health', goalGain: 'Gain weight',
     computedTitle: 'Your daily targets',
     computedSub: 'These are calculated from your profile. You can update them anytime in settings.',
     medDisclaimer: 'Health Garden is not a medical app and does not provide diagnoses or treatment advice. Always consult a qualified healthcare provider for medical decisions.',
@@ -181,7 +194,7 @@ const S = {
     forgotPassword: 'پاس ورڈ بھول گئے؟', orContinue: 'یا جاری رکھیں',
     google: 'گوگل سے جاری رکھیں',
     greeting: 'سلام', greetingEvening: 'شام بخیر',
-    daysThisWeek: 'دن اس ہفتے', moreToGrow: 'مزید بڑھنے کے لیے',
+    daysThisWeek: 'دن اس چکر میں', moreToGrow: 'مزید بڑھنے کے لیے',
     restingLabel: 'آج آرام', fullyGrown: 'اس ہفتے پوری طرح اگا',
     shareGarden: 'باغیچہ شیئر کریں', viewHistory: 'تاریخ دیکھیں',
     mint: 'پانی', cactus: 'شکر سے پاک', bamboo: 'پروٹین',
@@ -210,7 +223,7 @@ const S = {
     actSedentary: 'زیادہ بیٹھنا', actLight: 'ہلکی سرگرمی',
     actModerate: 'معتدل سرگرمی', actVery: 'بہت زیادہ سرگرمی',
     goalLose: 'وزن کم کریں', goalMaintain: 'وزن برقرار رکھیں',
-    goalStrength: 'طاقت بڑھائیں', goalGeneral: 'عام صحت',
+    goalStrength: 'طاقت بڑھائیں', goalGeneral: 'عام صحت', goalGain: 'وزن بڑھائیں',
     computedTitle: 'آپ کے روزانہ اہداف',
     computedSub: 'یہ آپ کی پروفائل سے حساب کیے گئے ہیں۔ آپ انہیں سیٹنگز میں تبدیل کر سکتے ہیں۔',
     medDisclaimer: 'ہیلتھ گارڈن ایک طبی ایپ نہیں ہے اور نہ ہی یہ تشخیص یا علاج کا مشورہ دیتی ہے۔ طبی فیصلوں کے لیے ہمیشہ ڈاکٹر سے مشورہ کریں۔',

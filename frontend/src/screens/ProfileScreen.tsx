@@ -186,7 +186,7 @@ export default function ProfileScreen({ navigate, lang, setLang, isPremium, stat
 
           <Section title={lang === 'ur' ? 'ڈیٹا اور رازداری' : 'Data & Privacy'}>
             <Row label={t('exportData', lang)} />
-            <Row label={t('privacy', lang)} />
+            <Row label={t('privacy', lang)} onPress={() => navigate('privacy')} />
             <button
               onClick={() => setShowDeleteConfirm(true)}
               className="w-full py-3.5 text-left"
@@ -196,8 +196,8 @@ export default function ProfileScreen({ navigate, lang, setLang, isPremium, stat
           </Section>
 
           <Section title={lang === 'ur' ? 'معلومات' : 'Info'}>
-            <Row label={t('terms', lang)} />
-            <Row label={t('about', lang)} />
+            <Row label={t('terms', lang)} onPress={() => navigate('terms')} />
+            <Row label={t('about', lang)} onPress={() => navigate('about')} />
           </Section>
 
           <button

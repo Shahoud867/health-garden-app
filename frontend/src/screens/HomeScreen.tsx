@@ -1,4 +1,5 @@
 import type { NavProps, AppState } from '../types'
+import { CYCLE_LENGTH } from '../types'
 import PlantImage from '../components/PlantImage'
 import {
   ActionTile,
@@ -146,7 +147,7 @@ export default function HomeScreen({ navigate, lang, state }: Props) {
           <div className="mt-4 grid grid-cols-5 gap-1.5 rounded-[24px] bg-[#fff8ee] px-3 py-3">
             {GARDEN_META.map((meta) => {
               const plant = garden.find((p) => p.type === meta.type)!
-              const stage = Math.min(3, Math.floor(plant.daysThisWeek / 2)) as 0 | 1 | 2 | 3
+              const stage = Math.min(CYCLE_LENGTH, plant.cycleDays) as 0 | 1 | 2 | 3
               return (
                 <div key={meta.type} className="flex flex-col items-center text-center">
                   {/* Fixed-height box so the five plants share one ground line
@@ -158,7 +159,7 @@ export default function HomeScreen({ navigate, lang, state }: Props) {
                     {lang === 'ur' ? meta.labelUr : meta.labelEn}
                   </div>
                   <div className="mt-0.5 text-[11px] font-extrabold" style={{ color: meta.color }}>
-                    {plant.daysThisWeek}/7
+                    {plant.cycleDays}/{CYCLE_LENGTH}
                   </div>
                 </div>
               )

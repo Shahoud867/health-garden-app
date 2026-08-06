@@ -28,7 +28,7 @@ export default function WorkoutScreen({ navigate, lang, state, setState }: Props
   const [selected, setSelected] = useState<(typeof WORKOUTS)[number] | null>(null)
   const [duration, setDuration] = useState(20)
 
-  const hasJointCondition = state.user.conditions.includes('joint')
+  const hasJointCondition = state.user.conditions.includes('knee_pain')
 
   const filtered = WORKOUTS.filter((w) => {
     if (hasJointCondition && !w.jointSafe) return false

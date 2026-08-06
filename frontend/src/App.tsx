@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { Screen, Lang, AppState } from './types'
 import BottomNav from './components/BottomNav'
 import LandingScreen from './screens/LandingScreen'
@@ -15,6 +15,7 @@ import AIPlanScreen from './screens/AIPlanScreen'
 import PremiumScreen from './screens/PremiumScreen'
 import PricingScreen from './screens/PricingScreen'
 import ProfileScreen from './screens/ProfileScreen'
+import LegalScreen from './screens/LegalScreen'
 
 const INITIAL_STATE: AppState = {
   lang: 'en',
@@ -29,7 +30,7 @@ const INITIAL_STATE: AppState = {
     heightCm: 165,
     weightKg: 65,
     activityLevel: 'moderate',
-    goal: 'general',
+    goal: 'general_health',
     conditions: [],
     calorieTarget: 1800,
     proteinTarget: 104,
@@ -45,11 +46,11 @@ const INITIAL_STATE: AppState = {
     weightLog: null,
   },
   garden: [
-    { type: 'cactus',     goal: 'Sugar-free days', goalUr: 'شکر سے پاک دن', daysThisWeek: 4, metToday: true  },
-    { type: 'sunflower',  goal: 'Movement',         goalUr: 'ورزش',           daysThisWeek: 2, metToday: false },
-    { type: 'bellflower', goal: 'Hydration',         goalUr: 'پانی',           daysThisWeek: 5, metToday: true  },
-    { type: 'bamboo',     goal: 'Protein',           goalUr: 'پروٹین',         daysThisWeek: 3, metToday: false },
-    { type: 'succulent',  goal: 'Consistency',       goalUr: 'مستقل مزاجی',   daysThisWeek: 6, metToday: true  },
+    { type: 'cactus',     goal: 'Sugar-free days', goalUr: 'شکر سے پاک دن', cycleDays: 1, metToday: true  },
+    { type: 'sunflower',  goal: 'Movement',         goalUr: 'ورزش',           cycleDays: 0, metToday: false },
+    { type: 'bellflower', goal: 'Hydration',         goalUr: 'پانی',           cycleDays: 2, metToday: true  },
+    { type: 'bamboo',     goal: 'Protein',           goalUr: 'پروٹین',         cycleDays: 1, metToday: false },
+    { type: 'succulent',  goal: 'Consistency',       goalUr: 'مستقل مزاجی',   cycleDays: 2, metToday: true  },
   ],
   weightHistory: [
     { date: '2025-06-01', weight: 67.2 },
@@ -81,6 +82,13 @@ export default function App() {
   const setState = (patch: Partial<AppState>) => setStateRaw(prev => ({ ...prev, ...patch }))
 
   const navigate = (s: Screen) => setScreen(s)
+
+  // Every screen is rendered into the same scroll container, so without this
+  // a new screen inherits the previous one's scroll position -- tapping
+  // "Privacy Policy" in the footer would open the document halfway down.
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [screen])
 
   const { lang } = state
 
@@ -182,6 +190,13 @@ export default function App() {
 
       case 'profile':
         return <ProfileScreen {...navProps} state={state} setState={setState} onLogout={onLogout}/>
+
+      // Readable signed-out too: the landing footer links here before anyone
+      // has an account, so these must not sit behind the auth guard.
+      case 'privacy':
+      case 'terms':
+      case 'about':
+        return <LegalScreen {...navProps} doc={screen} backTo={isLoggedIn ? 'profile' : 'landing'}/>
 
       default:
         return <LandingScreen {...navProps}/>

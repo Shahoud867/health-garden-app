@@ -146,8 +146,17 @@ export default function LandingScreen({ navigate, lang, setLang }: NavProps) {
 
         <footer className="mt-7 border-t border-[#eadcc7] py-7 text-center">
           <div className="flex justify-center gap-5">
-            {[t('privacy', lang), t('terms', lang), t('about', lang)].map((label) => (
-              <button key={label} type="button" className="text-sm font-bold text-[#6e5d4a]">
+            {([
+              ['privacy', t('privacy', lang)],
+              ['terms', t('terms', lang)],
+              ['about', t('about', lang)],
+            ] as const).map(([screen, label]) => (
+              <button
+                key={screen}
+                type="button"
+                onClick={() => navigate(screen)}
+                className="text-sm font-bold text-[#6e5d4a]"
+              >
                 {label}
               </button>
             ))}

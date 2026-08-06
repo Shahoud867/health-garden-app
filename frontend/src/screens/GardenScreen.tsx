@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { NavProps, AppState, PlantState } from '../types'
-import { t } from '../types'
+import { t, CYCLE_LENGTH } from '../types'
 import PlantImage from '../components/PlantImage'
 import GardenBoard from '../components/GardenBoard'
 import { DEFAULT_THEME_SLUG, themeBySlug } from '../data/gardenThemes'
@@ -22,11 +22,13 @@ const PLANT_META: Record<string, { labelEn: string; labelUr: string; goalEn: str
 
 const PLANT_ORDER: PlantType[] = ['cactus', 'sunflower', 'bellflower', 'bamboo', 'succulent']
 
-function stageFromDays(days: number): 0 | 1 | 2 | 3 {
-  if (days <= 1) return 0
-  if (days <= 3) return 1
-  if (days <= 5) return 2
-  return 3
+/**
+ * A plant's artwork stage is simply how many qualifying days it has banked in
+ * the current cycle. Three completes it, at which point the backend plants it
+ * and starts a fresh cycle -- so an in-progress plant is only ever 0-2.
+ */
+function stageFromCycle(cycleDays: number): 0 | 1 | 2 | 3 {
+  return Math.min(cycleDays, CYCLE_LENGTH) as 0 | 1 | 2 | 3
 }
 
 /**
@@ -34,12 +36,12 @@ function stageFromDays(days: number): 0 | 1 | 2 | 3 {
  *
  * Placeholder until this screen is wired to the backend, which stores one
  * permanent_garden row per earned plant with its own board and slot index.
- * Derived from the weekly mock data so the board still reflects real
- * progress: every completed cycle a habit has finished contributes one plant,
- * cycling through the five kinds in a stable order.
+ * Stands in with a plausible history: a habit further into its current cycle
+ * has plainly been kept longer, so it contributes proportionally more
+ * already-finished plants.
  */
 function earnedPlants(garden: PlantState[]): PlantType[] {
-  const perHabit = garden.map((p) => ({ type: p.type, cycles: Math.floor(p.daysThisWeek / 2) }))
+  const perHabit = garden.map((p) => ({ type: p.type, cycles: p.cycleDays * 2 }))
   const total = perHabit.reduce((sum, p) => sum + p.cycles, 0)
   const out: PlantType[] = []
   let i = 0
@@ -74,9 +76,9 @@ function fillBoard(count: number, seed: number): PlantType[] {
 
 function PlantProgress({ plant, lang }: { plant: PlantState; lang: Props['lang'] }) {
   const meta = PLANT_META[plant.type]
-  const stage = stageFromDays(plant.daysThisWeek)
+  const stage = stageFromCycle(plant.cycleDays)
   const isResting = !plant.metToday
-  const pct = Math.min(100, (plant.daysThisWeek / 7) * 100)
+  const pct = Math.min(100, (plant.cycleDays / CYCLE_LENGTH) * 100)
 
   return (
     <div className="flex items-center gap-3 border-b border-[#eadcc7] py-3 last:border-b-0">
@@ -89,7 +91,7 @@ function PlantProgress({ plant, lang }: { plant: PlantState; lang: Props['lang']
             {lang === 'ur' ? meta.labelUr : meta.labelEn}
           </div>
           <div className="shrink-0 text-sm font-extrabold" style={{ color: isResting ? '#8b6f46' : meta.color }}>
-            {plant.daysThisWeek}/7
+            {plant.cycleDays}/{CYCLE_LENGTH}
           </div>
         </div>
         <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-[#f3ead7]">
