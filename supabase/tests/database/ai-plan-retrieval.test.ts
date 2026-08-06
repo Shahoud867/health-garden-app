@@ -116,7 +116,10 @@ describe('candidate_recipes_for_user (ADR-0024/0027)', () => {
 
   it('excludes a recipe matching a food allergy by ingredient text', async () => {
     user = await createTestUser();
-    await serviceRoleClient.from('users').update({ food_allergies: 'peanut' }).eq('id', user.userId);
+    await serviceRoleClient
+      .from('users')
+      .update({ food_allergies: 'peanut' })
+      .eq('id', user.userId);
 
     const marker = randomUUID().slice(0, 8);
     const { data: allergenic } = await serviceRoleClient

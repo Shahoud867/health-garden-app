@@ -37,7 +37,12 @@ RETURNS TABLE (
 DECLARE
   u RECORD;
 BEGIN
-  SELECT * INTO u FROM users WHERE id = p_user_id;
+  -- users.id, not bare id: RETURNS TABLE's own `id BIGINT` output column is
+  -- in scope as a PL/pgSQL variable throughout this function body, so an
+  -- unqualified `id` here is genuinely ambiguous between that and
+  -- users.id -- caught only once a real DB-level test actually executed
+  -- this function (SQLSTATE 42702), not by anything short of that.
+  SELECT * INTO u FROM users WHERE users.id = p_user_id;
 
   RETURN QUERY
   SELECT r.id, r.recipe_name, r.urdu_name, r.calories_per_serving, r.protein_g, r.cost_pkr_per_serving
@@ -95,7 +100,12 @@ RETURNS TABLE (
 DECLARE
   u RECORD;
 BEGIN
-  SELECT * INTO u FROM users WHERE id = p_user_id;
+  -- users.id, not bare id: RETURNS TABLE's own `id BIGINT` output column is
+  -- in scope as a PL/pgSQL variable throughout this function body, so an
+  -- unqualified `id` here is genuinely ambiguous between that and
+  -- users.id -- caught only once a real DB-level test actually executed
+  -- this function (SQLSTATE 42702), not by anything short of that.
+  SELECT * INTO u FROM users WHERE users.id = p_user_id;
 
   RETURN QUERY
   SELECT e.id, e.exercise_name, e.urdu_name, e.category, e.met_value, e.intensity_level
