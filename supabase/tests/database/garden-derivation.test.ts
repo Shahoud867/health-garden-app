@@ -84,7 +84,7 @@ describe('garden derivation engine v2 (garden mechanic v2, ADR-0026) — the hig
     user = await createTestUser();
     await serviceRoleClient
       .from('users')
-      .update({ daily_protein_target_g: 50 })
+      .update({ goal: 'build_muscle', daily_protein_target_g: 50 })
       .eq('id', user.userId);
     const start = await backdateCycle(user.userId, 'protein', 10);
     const day = (offset: number) => addDays(start, offset);
@@ -131,7 +131,7 @@ describe('garden derivation engine v2 (garden mechanic v2, ADR-0026) — the hig
     user = await createTestUser();
     await serviceRoleClient
       .from('users')
-      .update({ daily_protein_target_g: 50 })
+      .update({ goal: 'build_muscle', daily_protein_target_g: 50 })
       .eq('id', user.userId);
     const start = await backdateCycle(user.userId, 'protein', 10);
     const day = (offset: number) => addDays(start, offset);
@@ -186,7 +186,7 @@ describe('garden derivation engine v2 (garden mechanic v2, ADR-0026) — the hig
 
     await serviceRoleClient
       .from('users')
-      .update({ daily_protein_target_g: 50 })
+      .update({ goal: 'build_muscle', daily_protein_target_g: 50 })
       .eq('id', user.userId);
     const start = await backdateCycle(user.userId, 'protein', 10);
     for (let offset = 0; offset < 3; offset += 1) {
@@ -364,7 +364,7 @@ describe('garden derivation engine v2 (garden mechanic v2, ADR-0026) — the hig
     user = await createTestUser();
     await serviceRoleClient
       .from('users')
-      .update({ daily_protein_target_g: 50 })
+      .update({ goal: 'build_muscle', daily_protein_target_g: 50 })
       .eq('id', user.userId);
     const start = await backdateCycle(user.userId, 'protein', 10);
     const today = new Date().toISOString().slice(0, 10);
