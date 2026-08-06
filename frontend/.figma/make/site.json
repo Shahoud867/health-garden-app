@@ -1,0 +1,10 @@
+{
+  "description": "This web application streamlines project management by allowing users to create and organize tasks based on custom instructions, enhancing productivity and collaboration.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}

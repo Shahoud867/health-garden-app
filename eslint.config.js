@@ -22,6 +22,13 @@ export default tseslint.config(
       'build/**',
       'supabase/functions/**',
       'supabase/.temp/**',
+      // The web client is a browser-targeted Vite/React project with its own
+      // toolchain and globals. This config only sets Node globals, so it would
+      // misflag every browser API there; `frontend` typechecks itself via
+      // `npm run typecheck --prefix frontend`. Same directory split as Deno.
+      'frontend/**',
+      // Locally-installed editor/agent tooling, never project source.
+      '.claude/**',
     ],
   },
   js.configs.recommended,
