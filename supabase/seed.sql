@@ -9426,7 +9426,7 @@ Salt according to taste
 1 tsp brown sugar', '1. Put all the ingredients in a blender and mix well.
 2. Strain and throw out the residue.
 3. Serve the strained chutney with kababs, tikkas.', 35, 0.76, 8.77, 0.2, 'N', NULL, NULL, 'Desi Cookbook — https://www.desicookbook.com/khajur-ki-chutney/'),
-(NULL, NULL, NULL, '1 bundle of mint (Podina) leaves
+('Mint Chutney', NULL, NULL, '1 bundle of mint (Podina) leaves
 1 tsp. salt
 ½ cup whole dried red chilies
 5 tbs. tamarind (Imli) paste
