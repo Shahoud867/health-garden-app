@@ -27,6 +27,10 @@ coverage/
 out/
 dist/
 build/
+.vercel/
+
+# TypeScript incremental build cache
+*.tsbuildinfo
 
 # Editor
 .DS_Store
@@ -37,3 +41,15 @@ Thumbs.db
 # Logs
 *.log
 npm-debug.log*
+
+# Never commit a real key/certificate — a defensive backstop alongside the
+# .env handling above, since this app handles health and payment data.
+*.pem
+*.key
+*.p12
+*.pfx
+
+# OS/editor scratch files
+*.tmp
+*.temp
+*~
