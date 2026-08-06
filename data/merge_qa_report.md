@@ -4,10 +4,9 @@ foods_clean.csv: 1302 rows
 
 recipes_clean.csv: 619 rows
 
-Excluded entirely: health  kagglwe/ folder (synthetic/fabricated data -- see prior analysis: randomly assigned ingredients/macros not tied to the actual dish)
+Excluded entirely: health kagglwe/ folder (synthetic/fabricated data -- see prior analysis: randomly assigned ingredients/macros not tied to the actual dish)
 
 ---
-
 
 ## foods_master_data.csv
 
