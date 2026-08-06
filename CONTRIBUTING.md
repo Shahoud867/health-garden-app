@@ -9,7 +9,7 @@ the failure mode that actually threatens a team that size: **losing shared conte
 ## Before you start
 
 Read the relevant section of
-[`Health-Garden-System-Architecture-Blueprint.md`](../Health-Garden-System-Architecture-Blueprint.md)
+[`Health-Garden-System-Architecture-Blueprint.md`](Health-Garden-System-Architecture-Blueprint.md)
 (v2.3). It is the single source of truth. Implementation follows it; where implementation must
 diverge, the blueprint is updated **first** and an ADR records why.
 

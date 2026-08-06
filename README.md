@@ -7,7 +7,7 @@ for premium plans/chat. **Web-first** (Next.js PWA) — a React Native port is a
 track gated behind real-user retention data, not a launch requirement.
 
 > **Architecture is specified before it is built.** The authoritative design document is
-> [`Health-Garden-System-Architecture-Blueprint.md`](../Health-Garden-System-Architecture-Blueprint.md)
+> [`Health-Garden-System-Architecture-Blueprint.md`](Health-Garden-System-Architecture-Blueprint.md)
 > (**v2.3**). Every decision in this repository traces to a section or ADR in that document. If
 > code and blueprint disagree, one of them is a bug — resolve it, do not let them drift.
 >
@@ -62,6 +62,30 @@ scheduled job to. `pg_net`'s calls into them read the target URL from `app_confi
 the service-role key from **Supabase Vault** (genuinely secret, encrypted at rest — never a plain
 table), set up once per environment; see `docs/adr/0024-garden-write-protection.md`'s reasoning
 applied to the one credential that can bypass every RLS policy at once if it ever leaked.
+
+**Pre-Phase-7 remediation: garden mechanic v2 + AI plan retrieval-grounding.** Two proposal
+documents (frontend-authored, backend-owner-audience) surfaced real gaps against what had already
+been built — reviewed, resolved with the user, and landed before continuing to Phase 7:
+
+- **Garden engine rewritten** (`docs/adr/0026-garden-mechanic-v2.md`): growth is now per-qualifying-day
+  (cycle-based, 3 days per plant) instead of weekly; a plant is planted into `permanent_garden` the
+  moment it fully grows, not by a weekly `pg_cron` sweep (deleted, along with
+  `archive_and_reset_stale_garden_rows`); `permanent_garden` gained `board_number`/`slot_index`
+  (25-slot, 5x5 board) and is now an append-only ledger, not a re-derivable aggregate. Hydration and
+  the primary-goal plant are personalised (`users.daily_water_target_glasses`,
+  `users.goal`-branching) instead of hardcoded.
+- **AI plan generation is now retrieval-grounded** (`docs/adr/0027-ai-plan-retrieval-grounding.md`):
+  `ai-plan-generate` used to ask Gemini to invent Pakistani dishes from its own training data —
+  plans could reference foods that don't exist in this database. Two new `SECURITY DEFINER`
+  functions (migration 0013) pre-filter real recipes/exercises on this user's conditions,
+  allergies, dislikes, budget, and equipment access; the model may only build a plan from that
+  candidate list, referenced by id. `ai_plans` gained `plan_type`/`period_kind` so a weekly diet
+  plan and a monthly workout plan coexist.
+- **`GEMINI_MODEL` default fixed**: `gemini-2.0-flash` was retired 1 June 2026; the default is now
+  `gemini-3.5-flash`. This was silently broken (chat degraded to a templated fallback with no
+  error; plan generation failed loudly) until caught during this review — verify the real quota
+  threshold in `gemini-quota-watchdog` against your actual Google AI Studio rate limits, since the
+  seeded `1200` figure is an unverified assumption, not a number read from a live account.
 
 ---
 
@@ -173,7 +197,7 @@ supabase/
     account-export/        Right-to-access data export (§7.9)
     account-delete/         Right-to-erasure account deletion (§7.9)
     ai-chat/                Capped daily coaching chat (§4.3/§12.5, ADR-003)
-    ai-plan-generate/       Weekly AI plan generation, with regeneration cap
+    ai-plan-generate/       Retrieval-grounded diet (weekly)/workout (monthly) plans, regeneration cap
     payments-submit-intent/  Interim payment verification — submission (ADR-008)
     payments-approve-intent/ Interim payment verification — founder approval (ADR-0025)
     notify-inactive-users/  Engagement-nudge Web Push, cron-triggered (§4.6, §2.8)

@@ -527,7 +527,9 @@ See §11.12 for exactly what does and does not need rebuilding when/if Track B i
 
 v1.0 specified garden-state recalculation as a Postgres trigger incrementing a stored counter. That design has a latent correctness bug: if two log-writes for the same day both satisfy a goal (e.g., two protein-rich meals logged separately, or the same log re-synced after a dropped connection before the `client_uuid` uniqueness constraint was considered), a naive increment can **double-count a single day**, corrupting the weekly total.
 
-**v2.0 resolves this structurally (ADR-002):** `garden_state.days_succeeded_this_week` is never incremented directly. Instead, it is **recomputed from source-of-truth logs** every time a relevant log is inserted, via a Postgres function that counts `DISTINCT log_date` values meeting each goal's threshold for the current week. Recomputing the same input always produces the same output — the operation is naturally **idempotent**, which means it is also naturally **safe under multi-device sync, retries, and out-of-order delivery** without any additional locking or deduplication logic. Full implementation in §5.3.
+**v2.0 resolves this structurally (ADR-002):** `garden_state.current_stage` is never incremented directly. Instead, it is **recomputed from source-of-truth logs** every time a relevant log is inserted, via a Postgres function that counts qualifying calendar days meeting each goal's threshold. Recomputing the same input always produces the same output — the operation is naturally **idempotent**, which means it is also naturally **safe under multi-device sync, retries, and out-of-order delivery** without any additional locking or deduplication logic. Full implementation in §5.3.
+
+**[Revised, garden mechanic v2 — ADR-0026]** The original design counted qualifying days within a fixed, Monday-reset calendar week (`days_succeeded_this_week`, 0-7). This is superseded: growth is now **cycle-based**, counting qualifying days since a plant's own `cycle_started_on` rather than a shared calendar boundary, and reaching the cycle length (3 days) is a **graduation event** — the plant is archived into `permanent_garden` and a fresh cycle starts immediately, rather than waiting for a weekly sweep. The idempotent-recompute guarantee above still holds for `garden_state`; it no longer extends to `permanent_garden`, which is now an append-only ledger of earned events (§5.4).
 
 ### 4.5 Authentication & Authorization Flow
 
@@ -535,13 +537,13 @@ v1.0 specified garden-state recalculation as a Postgres trigger incrementing a s
 
 ### 4.6 Background Job Processing
 
-| Job                              | Trigger                                | Mechanism                                                                                                                       |
-| -------------------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| Weekly garden archival           | Monday 00:00 Asia/Karachi              | `pg_cron` → PL/pgSQL function (resolves G-6), with lazy per-user fallback as a defensive second layer                           |
-| Daily AI usage tracking          | N/A — date-keyed rows, no reset needed | Simplification over a literal "reset job"                                                                                       |
-| Engagement-nudge notification    | Daily, e.g. 18:00 local                | `pg_cron` → Edge Function → Web Push API (§2.8)                                                                                 |
-| Gemini quota watchdog            | Every 30 minutes                       | `pg_cron` → Edge Function → sums today's calls → alerts + can flip `app_config` kill switch automatically at 80% of known quota |
-| **[New]** Payment reconciliation | Daily                                  | `pg_cron` → Edge Function → re-checks any `payment_intents` left in `pending_review` beyond 48h, alerts founders                |
+| Job                                                                     | Trigger                                | Mechanism                                                                                                                                                        |
+| ----------------------------------------------------------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ~~Weekly garden archival~~ **[Removed, garden mechanic v2 — ADR-0026]** | ~~Monday 00:00 Asia/Karachi~~          | Planting is now event-driven, inside `sync_garden_state` (§5.3) — a plant is archived the moment it fully grows, not on a weekly sweep. No cron job left to run. |
+| Daily AI usage tracking                                                 | N/A — date-keyed rows, no reset needed | Simplification over a literal "reset job"                                                                                                                        |
+| Engagement-nudge notification                                           | Daily, e.g. 18:00 local                | `pg_cron` → Edge Function → Web Push API (§2.8)                                                                                                                  |
+| Gemini quota watchdog                                                   | Every 30 minutes                       | `pg_cron` → Edge Function → sums today's calls → alerts + can flip `app_config` kill switch automatically at 80% of known quota                                  |
+| **[New]** Payment reconciliation                                        | Daily                                  | `pg_cron` → Edge Function → re-checks any `payment_intents` left in `pending_review` beyond 48h, alerts founders                                                 |
 
 ### 4.7 File Upload Flow
 
@@ -594,7 +596,7 @@ This is the single most severe hazard the web pivot introduces, and it did not e
 
 ### 5.2 Complete Schema
 
-Reference tables (`foods`, `recipes`, `exercises`) and the base `users` table are as specified in `Founder_B_Backend_Roadmap.md` and unchanged. The tables below are this document's complete, final set of additions — including the fields needed for wearable/source tracking (§11.2) built in now at zero marginal cost.
+Reference tables (`foods`, `recipes`, `exercises`) and the base `users` table are as specified in `Founder_B_Backend_Roadmap.md`, plus two later additive rounds: `users.goal` gained a `CHECK` constraint and `users.daily_water_target_glasses` was added (garden mechanic v2, ADR-0026 — the primary-goal and hydration plants now branch on real, closed values instead of an unconstrained string / a hardcoded 8); and `users` gained `food_allergies`, `disliked_food_tags`, `daily_food_budget_pkr`, `meals_per_day`, `workout_days_per_week`, `workout_session_minutes`, `equipment_access` (AI plan retrieval-grounding, ADR-0027 — `diet_type` deliberately not added yet, see that ADR). The tables below are this document's complete, final set of additions — including the fields needed for wearable/source tracking (§11.2) built in now at zero marginal cost.
 
 ```sql
 -- ============================================================
@@ -696,14 +698,19 @@ CREATE TABLE daily_ai_usage (
   UNIQUE (user_id, usage_date)
 );
 
+-- [Revised, AI plan retrieval-grounding round — ADR-0027] plan_type/period_start/
+-- period_kind replace the single week_start: a weekly diet plan and a monthly
+-- workout plan now coexist for the same user.
 CREATE TABLE ai_plans (
   id BIGSERIAL PRIMARY KEY,
   user_id UUID NOT NULL REFERENCES users(id),
   generated_at TIMESTAMP DEFAULT NOW(),
-  week_start DATE NOT NULL,
+  plan_type VARCHAR(20) NOT NULL DEFAULT 'diet',   -- 'diet' | 'workout'
+  period_start DATE NOT NULL,                      -- Monday of the ISO week, or the 1st of the month
+  period_kind VARCHAR(10) NOT NULL DEFAULT 'week',  -- 'week' | 'month'
   regenerations_used INT NOT NULL DEFAULT 0,
   plan_content JSONB NOT NULL,
-  UNIQUE (user_id, week_start)
+  UNIQUE (user_id, plan_type, period_start)
 );
 
 -- ============================================================
@@ -751,91 +758,46 @@ CREATE TABLE organization_members (
 
 ### 5.3 The Garden Recalculation Engine (ADR-002 — Full Implementation)
 
-Rather than incrementing a stored counter (the v1.0 design, now retired), each goal's weekly success count is **derived fresh from the underlying logs** every time it's needed. This function is intentionally idempotent: calling it ten times with the same data produces the same result, which is exactly the property that makes it safe under offline, multi-device, retried sync.
+Rather than incrementing a stored counter (the v1.0 design, now retired), each goal's success count is **derived fresh from the underlying logs** every time it's needed. This function is intentionally idempotent: calling it ten times with the same data produces the same result, which is exactly the property that makes it safe under offline, multi-device, retried sync.
+
+**[Revised, garden mechanic v2 — ADR-0026]** The version below is the current design: growth counts qualifying days since a plant's own `cycle_started_on` (not a shared Monday-reset week), consistency depends on the other four goals succeeding on the _same day_ (so a single set-based helper evaluates all five goals per day, rather than one goal at a time), the primary-goal plant branches on `users.goal`, and reaching the cycle length is a graduation event handled inline — no separate weekly sweep exists anymore (§4.6). See migration `0005_garden_engine.sql` and ADR-0026 for the complete, current implementation; representative shape:
 
 ```sql
-CREATE OR REPLACE FUNCTION compute_days_succeeded(
-  p_user_id UUID, p_goal_type VARCHAR, p_week_start DATE
-) RETURNS INT AS $$
-DECLARE
-  v_count INT;
-  v_protein_target DECIMAL;
-BEGIN
-  SELECT daily_protein_target_g INTO v_protein_target FROM users WHERE id = p_user_id;
-
-  IF p_goal_type = 'protein' THEN
-    SELECT COUNT(*) INTO v_count FROM (
-      SELECT log_date FROM food_logs
-      WHERE user_id = p_user_id AND log_date BETWEEN p_week_start AND p_week_start + 6
-      GROUP BY log_date HAVING SUM(protein_g_snapshot) >= v_protein_target
-    ) d;
-
-  ELSIF p_goal_type = 'sugar_free' THEN
-    SELECT COUNT(*) INTO v_count FROM (
-      SELECT DISTINCT log_date FROM food_logs f1
-      WHERE user_id = p_user_id AND log_date BETWEEN p_week_start AND p_week_start + 6
-        AND NOT EXISTS (
-          SELECT 1 FROM food_logs f2
-          WHERE f2.user_id = f1.user_id AND f2.log_date = f1.log_date
-            AND f2.sugar_flag_snapshot = 'Y'
-        )
-    ) d;
-
-  ELSIF p_goal_type = 'hydration' THEN
-    SELECT COUNT(*) INTO v_count FROM (
-      SELECT log_date FROM water_logs
-      WHERE user_id = p_user_id AND log_date BETWEEN p_week_start AND p_week_start + 6
-      GROUP BY log_date HAVING SUM(glasses_logged) >= 8
-    ) d;
-
-  ELSIF p_goal_type = 'movement' THEN
-    SELECT COUNT(DISTINCT log_date) INTO v_count FROM workout_logs
-    WHERE user_id = p_user_id AND log_date BETWEEN p_week_start AND p_week_start + 6;
-
-  ELSIF p_goal_type = 'consistency' THEN
-    SELECT COUNT(DISTINCT log_date) INTO v_count FROM (
-      SELECT log_date FROM food_logs WHERE user_id = p_user_id
-      UNION SELECT log_date FROM workout_logs WHERE user_id = p_user_id
-      UNION SELECT log_date FROM water_logs WHERE user_id = p_user_id
-    ) all_logs
-    WHERE log_date BETWEEN p_week_start AND p_week_start + 6;
-  END IF;
-
-  RETURN COALESCE(v_count, 0);
-END;
-$$ LANGUAGE plpgsql;
+CREATE OR REPLACE FUNCTION daily_goal_success(
+  p_user_id UUID, p_from_date DATE, p_to_date DATE
+) RETURNS TABLE (
+  log_date DATE, hydration_ok BOOLEAN, sugar_free_ok BOOLEAN,
+  primary_goal_ok BOOLEAN, movement_ok BOOLEAN, consistency_ok BOOLEAN
+) AS $$
+  -- One set-based query per call: a calendar-day series LEFT JOINed against
+  -- per-day aggregates of water/food/workout logs. hydration_ok compares
+  -- against users.daily_water_target_glasses (falls back to 8 when unset);
+  -- primary_goal_ok branches on users.goal (lose_weight -> calories <= target,
+  -- gain_weight -> calories >= target, build_muscle -> protein >= target,
+  -- maintain/general_health/unset -> within +-10% of the calorie target);
+  -- consistency_ok is simply the other four ANDed together.
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 CREATE OR REPLACE FUNCTION sync_garden_state(p_user_id UUID) RETURNS VOID AS $$
 DECLARE
   goal RECORD;
-  v_days INT;
-  v_stage INT;
+  v_qualifying INT;
 BEGIN
-  FOR goal IN SELECT goal_type, current_week_start FROM garden_state WHERE user_id = p_user_id LOOP
-    v_days := compute_days_succeeded(p_user_id, goal.goal_type, goal.current_week_start);
-    v_stage := CASE WHEN v_days >= 6 THEN 3 WHEN v_days >= 4 THEN 2
-                     WHEN v_days >= 2 THEN 1 ELSE 0 END;
-    UPDATE garden_state
-      SET days_succeeded_this_week = v_days, current_stage = v_stage
-      WHERE user_id = p_user_id AND goal_type = goal.goal_type;
+  FOR goal IN SELECT id, goal_type, plant_type, cycle_started_on FROM garden_state WHERE user_id = p_user_id LOOP
+    -- Loop: count qualifying days since goal.cycle_started_on; once the count
+    -- reaches 3 (the cycle length), insert into permanent_garden at the next
+    -- board_number/slot_index (COUNT(*) of the user's prior plants, mod/div
+    -- 25), reset cycle_started_on to the day after the graduating day, and
+    -- re-check -- catching up any backlog in one call. Once under 3, set
+    -- current_stage to the remaining qualifying count (always 0-2) and
+    -- is_dormant_today to whether *today* specifically qualified.
   END LOOP;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
--- One shared trigger function across all three log tables
-CREATE OR REPLACE FUNCTION on_log_insert() RETURNS TRIGGER AS $$
-BEGIN
-  PERFORM sync_garden_state(NEW.user_id);
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER trg_food_log_garden AFTER INSERT ON food_logs
-  FOR EACH ROW EXECUTE FUNCTION on_log_insert();
-CREATE TRIGGER trg_workout_log_garden AFTER INSERT ON workout_logs
-  FOR EACH ROW EXECUTE FUNCTION on_log_insert();
-CREATE TRIGGER trg_water_log_garden AFTER INSERT ON water_logs
-  FOR EACH ROW EXECUTE FUNCTION on_log_insert();
+-- Same three AFTER INSERT OR UPDATE OR DELETE triggers on food_logs/
+-- workout_logs/water_logs as before, calling sync_garden_state via a shared
+-- on_log_change() trigger function.
 ```
 
 ### 5.4 Structural Guarantee for `permanent_garden`
@@ -853,6 +815,8 @@ FOR EACH ROW EXECUTE FUNCTION reject_permanent_garden_mutation();
 ```
 
 The database itself refuses the mutation, not just code review convention.
+
+**[Revised, garden mechanic v2 — ADR-0026]** Under the original weekly-sweep design this table was only ever written by a settled, once-a-week cron job. It is now written **live, mid-cycle**, from inside `sync_garden_state` (§5.3) — meaning a user can graduate a plant, then delete the log that made the final qualifying day count, and recomputing from source would say the plant should not have graduated. The insert-only guarantee above means it stays planted regardless. This is an accepted, deliberate stance (once earned, never revoked — see ADR-0026 for the full reasoning), not an oversight: `permanent_garden` is now an **append-only ledger of earned events**, not a value re-derivable from source logs the way `garden_state` still is.
 
 ### 5.5 Subscription State Trigger
 
@@ -892,7 +856,7 @@ All schema changes are numbered `.sql` files under `supabase/migrations/`, appli
 
 ### 5.10 Timezone Configuration — **[New, v2.3, closes G-16]**
 
-A hazard easy to miss entirely: Supabase's default database timezone is UTC. Every date-boundary computation the garden engine depends on — `CURRENT_DATE`, `date_trunc('week', ...)` in `seed_garden_state_for_new_user()` and `archive_stale_garden_row()` (§5.3), and every `log_date` a client sends — would silently mean "today in UTC," not "today in Pakistan." Since Pakistan Standard Time is UTC+5 with no daylight-saving shift, this isn't a rare edge case that only bites at midnight: **any log made between 7:00 PM and 11:59 PM PKT would record against the wrong calendar day** (UTC has already rolled to the next date), corrupting the exact day-counting logic ADR-002 was designed to get right.
+A hazard easy to miss entirely: Supabase's default database timezone is UTC. Every date-boundary computation the garden engine depends on — `CURRENT_DATE`, `date_trunc('week', ...)` in `seed_garden_state_for_new_user()`, `daily_goal_success()`'s per-day range, and `sync_garden_state()`'s graduation check (§5.3) — and every `log_date` a client sends — would silently mean "today in UTC," not "today in Pakistan." Since Pakistan Standard Time is UTC+5 with no daylight-saving shift, this isn't a rare edge case that only bites at midnight: **any log made between 7:00 PM and 11:59 PM PKT would record against the wrong calendar day** (UTC has already rolled to the next date), corrupting the exact day-counting logic ADR-002 was designed to get right.
 
 **Fix:** set the database timezone explicitly rather than leaving it at the platform default —
 
@@ -918,17 +882,17 @@ Pagination via `Range`/`Content-Range` headers; filtering via PostgREST operator
 
 ### 6.2 Custom Edge Function Endpoints
 
-| Endpoint                                 | Method | Auth                                                                                                     | Request                             | Response                           | Notes                                                                                                                                                 |
-| ---------------------------------------- | ------ | -------------------------------------------------------------------------------------------------------- | ----------------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/functions/v1/ai-chat`                  | POST   | JWT                                                                                                      | `{ message }`                       | `{ reply }` \| `{ error }`         | Pre-call cap check (§4.3); graceful fallback on Gemini timeout (§2.13)                                                                                |
-| `/functions/v1/ai-plan-generate`         | POST   | JWT                                                                                                      | `{}`                                | `{ plan }` \| `{ error }`          | Weekly cap via `ai_plans.week_start` uniqueness                                                                                                       |
-| `/functions/v1/payments-create-checkout` | POST   | JWT                                                                                                      | `{ plan }`                          | `{ checkout_url }`                 | Real merchant-API path, once available                                                                                                                |
-| `/functions/v1/payments-submit-intent`   | POST   | JWT                                                                                                      | `{ amount_pkr, method, reference }` | `{ intent_id, status }`            | **[New — ADR-008]** Interim manual-verification path: creates a `payment_intents` row                                                                 |
-| `/functions/v1/payments-approve-intent`  | POST   | Admin JWT (Retool) — a real user session checked against an email allowlist, ADR-0025, not a roles table | `{ intent_id, decision }`           | `{ status }`                       | **[New — ADR-008]** Founder approval action; writes `subscriptions` + `audit_log` on approval                                                         |
-| `/functions/v1/payments-webhook`         | POST   | Provider signature                                                                                       | Provider-defined                    | `200 OK`                           | Real merchant-API path, once available                                                                                                                |
-| `/functions/v1/health`                   | GET    | None                                                                                                     | —                                   | `{ status: "ok" }`                 | UptimeRobot target                                                                                                                                    |
-| `/functions/v1/account-export`           | GET    | JWT                                                                                                      | —                                   | `{ exportedAt, data }`             | **[New, Phase 4]** §7.9 right-to-access — dumps the caller's own rows across every user-owned table via the RLS-scoped client                         |
-| `/functions/v1/account-delete`           | POST   | JWT                                                                                                      | `{ confirm: true }`                 | `{ deleted: true }` \| `{ error }` | **[New, Phase 4]** §7.9 right-to-erasure — audit-logs the request, then deletes the caller's own `auth.users` row, cascading through the whole schema |
+| Endpoint                                 | Method | Auth                                                                                                     | Request                             | Response                           | Notes                                                                                                                                                                                                                                                                                                                    |
+| ---------------------------------------- | ------ | -------------------------------------------------------------------------------------------------------- | ----------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `/functions/v1/ai-chat`                  | POST   | JWT                                                                                                      | `{ message }`                       | `{ reply }` \| `{ error }`         | Pre-call cap check (§4.3); graceful fallback on Gemini timeout (§2.13)                                                                                                                                                                                                                                                   |
+| `/functions/v1/ai-plan-generate`         | POST   | JWT                                                                                                      | `{ plan_type, regenerate_reason? }` | `{ plan }` \| `{ error }`          | **[Revised — ADR-0027]** Retrieval-grounded: candidates come from `candidate_recipes_for_user`/`candidate_exercises_for_user`, never invented by the model. Weekly (diet) / monthly (workout) cap via `ai_plans (user_id, plan_type, period_start)` uniqueness; `regenerate_reason` is one of six fixed chips, diet-only |
+| `/functions/v1/payments-create-checkout` | POST   | JWT                                                                                                      | `{ plan }`                          | `{ checkout_url }`                 | Real merchant-API path, once available                                                                                                                                                                                                                                                                                   |
+| `/functions/v1/payments-submit-intent`   | POST   | JWT                                                                                                      | `{ amount_pkr, method, reference }` | `{ intent_id, status }`            | **[New — ADR-008]** Interim manual-verification path: creates a `payment_intents` row                                                                                                                                                                                                                                    |
+| `/functions/v1/payments-approve-intent`  | POST   | Admin JWT (Retool) — a real user session checked against an email allowlist, ADR-0025, not a roles table | `{ intent_id, decision }`           | `{ status }`                       | **[New — ADR-008]** Founder approval action; writes `subscriptions` + `audit_log` on approval                                                                                                                                                                                                                            |
+| `/functions/v1/payments-webhook`         | POST   | Provider signature                                                                                       | Provider-defined                    | `200 OK`                           | Real merchant-API path, once available                                                                                                                                                                                                                                                                                   |
+| `/functions/v1/health`                   | GET    | None                                                                                                     | —                                   | `{ status: "ok" }`                 | UptimeRobot target                                                                                                                                                                                                                                                                                                       |
+| `/functions/v1/account-export`           | GET    | JWT                                                                                                      | —                                   | `{ exportedAt, data }`             | **[New, Phase 4]** §7.9 right-to-access — dumps the caller's own rows across every user-owned table via the RLS-scoped client                                                                                                                                                                                            |
+| `/functions/v1/account-delete`           | POST   | JWT                                                                                                      | `{ confirm: true }`                 | `{ deleted: true }` \| `{ error }` | **[New, Phase 4]** §7.9 right-to-erasure — audit-logs the request, then deletes the caller's own `auth.users` row, cascading through the whole schema                                                                                                                                                                    |
 
 ### 6.3 Validation
 
@@ -956,11 +920,13 @@ Consistent `{error, message}` shape across every Edge Function — programmatic 
 ```ts
 interface AiProvider {
   chat(message: string, context: UserContext): Promise<string>;
-  generatePlan(profile: UserProfile): Promise<PlanContent>;
+  generatePlan(request: PlanRequest): Promise<PlanContent>;
 }
 ```
 
 Gemini becomes one implementation of `AiProvider`, selected by configuration rather than hard-coded throughout the Edge Functions. This costs a small amount of indirection now and buys a real option later: if Gemini's free tier is ever throttled, deprecated, or outpriced, a second provider (another free-tier LLM, or a self-hosted small model once justified — §11.3) is a new adapter, not a rewrite of every call site. This is the same "no hard vendor lock-in" discipline already applied to Supabase (ADR-011) and hosting (§3.1a), extended to the one remaining unabstracted dependency in the system.
+
+**[Revised, AI plan retrieval-grounding round — ADR-0027]** `generatePlan` originally took a five-field `UserProfile` (goal, activity level, conditions, calorie/protein targets) and asked the model to invent dishes from its own training data — plans could reference foods that don't exist in this database, which a user then cannot log. `PlanRequest` replaces it: it carries retrieval-grounded candidate lists (`candidateRecipes`/`candidateExercises`, from `candidate_recipes_for_user`/`candidate_exercises_for_user`, migration 0013 — filtered in plain SQL on conditions, allergies, dislikes, budget, and equipment access), two weeks of logged behaviour (`recentActivity`, a conscious, narrowly-scoped exception to this section's "never send raw health metrics" rule — defensible specifically because a weight-goal plan cannot be built without weight), and an optional fixed regeneration reason. The model is instructed to build a plan using only the given candidates, referenced by id, in a rigid one-line-per-item output format — never to invent. See ADR-0027 for the full reasoning, including why this was necessary (the feature could not connect to the rest of the product without it) and the content-coverage gaps it was verified against rather than assumed.
 
 **G-22 — prompt injection & unsafe-advice leakage.** A health-coaching chat that accepts free-text user input is a direct target for prompt injection (OWASP LLM Top 10, LLM01) — a user attempting to override the system prompt to extract it, or to coax the assistant into contradicting the medical disclaimer (§7's compliance posture) with confidently-worded but unsafe advice. Two layers, both cheap:
 
@@ -1628,15 +1594,16 @@ erDiagram
         bigint id PK
         uuid user_id FK
         varchar plant_type
-        int days_succeeded_this_week "derived, not incremented"
-        int current_stage
+        date cycle_started_on "growth counted since this date, not a shared week"
+        int current_stage "derived, not incremented; 0-2, 3 is a graduation event"
     }
     PERMANENT_GARDEN {
         bigint id PK
         uuid user_id FK
         varchar plant_type
-        date week_completed
-        int final_stage_reached
+        int board_number
+        int slot_index "0-24; 25-slot board, ADR-0026"
+        date completed_on
     }
     SUBSCRIPTIONS {
         bigint id PK
@@ -1833,7 +1800,7 @@ Offline-first design with idempotent, conflict-safe sync; RLS-based authorizatio
 _Status:_ Accepted. _Context:_ Two-person, part-time team, ₨15,000 ceiling, no DevOps headcount. _Decision:_ Use Supabase (Postgres + Auth + Storage + Edge Functions) as the entire backend, in place of a custom Node/NestJS API or Firebase. _Consequences:_ Near-zero backend code to operate; RLS replaces hand-written authorization middleware; open-source core avoids permanent vendor lock-in (see ADR-011).
 
 **ADR-002 — Garden state as a derived aggregate, never an incremented counter**
-_Status:_ Accepted, supersedes the v1.0 trigger design. _Context:_ Offline-first, multi-device sync can deliver the same logical event more than once or out of order; an incrementing counter can double-count under these conditions. _Decision:_ `garden_state.days_succeeded_this_week` is recomputed from source logs (`COUNT(DISTINCT log_date)` meeting each goal's threshold) on every relevant insert, never mutated directly. _Consequences:_ Naturally idempotent, naturally safe under retries/multi-device sync/out-of-order delivery, at the cost of a slightly more expensive recomputation query — acceptable at this data volume (§5.3).
+_Status:_ Accepted, supersedes the v1.0 trigger design. _Context:_ Offline-first, multi-device sync can deliver the same logical event more than once or out of order; an incrementing counter can double-count under these conditions. _Decision:_ `garden_state.current_stage` is recomputed from source logs (qualifying calendar days meeting each goal's threshold) on every relevant insert, never mutated directly. _Consequences:_ Naturally idempotent, naturally safe under retries/multi-device sync/out-of-order delivery, at the cost of a slightly more expensive recomputation query — acceptable at this data volume (§5.3). **[Amended, garden mechanic v2 — ADR-0026]** This guarantee now applies to `garden_state` only. `permanent_garden`, once written live by the same recompute path rather than only by a settled weekly sweep, is an append-only ledger of earned events — accepted as "once earned, never revoked" rather than re-derivable, for reasons recorded in ADR-0026.
 
 **ADR-003 — AI provider limited to server-side Gemini calls, hard pre-call quota gate**
 _Status:_ Accepted. _Context:_ Gemini's free tier is shared project-wide, not per-user; unrestricted client-side calls would exhaust it at trivial scale. _Decision:_ All AI calls route through Edge Functions; the usage cap is checked and incremented _before_ the external call, never after. _Consequences:_ Structurally impossible for a free user to trigger a billed call; premium overuse is capped by construction, not by policy enforcement after the fact.

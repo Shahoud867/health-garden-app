@@ -1,7 +1,7 @@
 # Architecture Decision Records
 
 ADR-001 through ADR-022 are recorded in Appendix A of
-[`Health-Garden-System-Architecture-Blueprint.md`](../../../Health-Garden-System-Architecture-Blueprint.md)
+[`Health-Garden-System-Architecture-Blueprint.md`](../../Health-Garden-System-Architecture-Blueprint.md)
 (v2.3) and are the architectural baseline for this repository. They are summarised below for
 reference; the blueprint remains authoritative. Numbers 017–018 are intentionally unused by the
 blueprint — implementation-level ADRs (decisions made during coding that the blueprint sets
@@ -35,8 +35,10 @@ starting at **ADR-0023**, so there is never a numbering collision between the tw
 
 ## Implementation decisions
 
-| ADR                                              | Decision                                                                      |
-| ------------------------------------------------ | ----------------------------------------------------------------------------- |
-| [0023](0023-declarative-edge-function-kernel.md) | A declarative endpoint factory as the Edge Function kernel                    |
-| [0024](0024-garden-write-protection.md)          | SELECT-only RLS for derived/protected values; all writes via SECURITY DEFINER |
-| [0025](0025-payments-approve-admin-auth.md)      | Founder-only access via real user JWT + email allowlist, not a roles table    |
+| ADR                                              | Decision                                                                                              |
+| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| [0023](0023-declarative-edge-function-kernel.md) | A declarative endpoint factory as the Edge Function kernel                                            |
+| [0024](0024-garden-write-protection.md)          | SELECT-only RLS for derived/protected values; all writes via SECURITY DEFINER                         |
+| [0025](0025-payments-approve-admin-auth.md)      | Founder-only access via real user JWT + email allowlist, not a roles table                            |
+| [0026](0026-garden-mechanic-v2.md)               | Cycle-based growth, event-driven planting, 25-slot board, `permanent_garden` as an append-only ledger |
+| [0027](0027-ai-plan-retrieval-grounding.md)      | Retrieval-grounded AI plan generation from real database candidates, not free-text invention          |
