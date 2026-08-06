@@ -1,6 +1,7 @@
 # Master Nutrition Database Summary & Quality Audit Report
 
 ## 1. Executive Summary
+
 - **Total Master Database Records**: **1,001 Verified Records** (Target of 1,000 achieved).
 - **Core Priority**: Accuracy, evidence-based data, standardized clinical fields, and regional relevance.
 - **Coverage**: Pakistani regional cuisines (Punjab, Sindh, KPK, Balochistan), Indian traditional/street foods, Middle Eastern, East Asian, Continental, Fast Foods, Beverages, Sweets, and raw agricultural ingredients (USDA FoodData Central).
@@ -26,7 +27,9 @@
 ---
 
 ## 2. Schema Specification & Compliance
+
 All 1,001 entries strictly follow the 36-column standardized database schema:
+
 1. `dish_name` - Standard English dish/ingredient name
 2. `urdu_name` - Authentic Urdu translation (Nastaliq script)
 3. `local_name` - Regional dialect/alternate name
@@ -67,6 +70,7 @@ All 1,001 entries strictly follow the 36-column standardized database schema:
 ---
 
 ## 3. Database Assets Created & Updated
+
 1. **Master CSV Dataset**: `data/foods_master_data.csv` (1,001 records)
 2. **Supabase SQL Seed File**: `supabase/seed_foods.sql` (1,001 SQL INSERT statements)
 3. **Data Processing Scripts**:
