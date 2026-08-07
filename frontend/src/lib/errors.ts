@@ -74,11 +74,19 @@ interface PostgrestLikeError {
 }
 
 function isPostgrestLikeError(err: unknown): err is PostgrestLikeError {
+  // `PostgrestError` (@supabase/postgrest-js) genuinely extends `Error` and
+  // always carries a `.code` string -- a network `TypeError` ("Failed to
+  // fetch") or a plain `Error` never do. Requiring `'code' in err` is what
+  // keeps those from being misrouted through this branch before they ever
+  // reach the `instanceof Error` network-error check below: caught by a
+  // unit test (tests/unit/errors.test.ts) that construed a real TypeError
+  // and found it was silently swallowed here, never reaching that check.
   return (
     typeof err === "object" &&
     err !== null &&
     "message" in err &&
-    typeof (err as { message: unknown }).message === "string"
+    typeof (err as { message: unknown }).message === "string" &&
+    "code" in err
   )
 }
 
