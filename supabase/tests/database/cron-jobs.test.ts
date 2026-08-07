@@ -5,20 +5,11 @@ import { cronJobsSnapshotPath } from './global-setup';
 import {
   createTestUser,
   deleteTestUser,
+  karachiToday,
   newPgClient,
   serviceRoleClient,
   type TestUser,
 } from './helpers';
-
-/** "Today" as the database's Asia/Karachi CURRENT_DATE would compute it
- * (§5.10, G-16) -- PKT is UTC+5 with no DST, so this is a fixed offset, not
- * a real timezone conversion. Using `new Date().toISOString()` directly
- * would be UTC's today, which can differ from the database's for several
- * hours a day -- exactly the class of bug the timezone fix exists to avoid,
- * so test fixtures have to respect it too, not just production code. */
-function karachiToday(): string {
-  return new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString().slice(0, 10);
-}
 
 describe('pg_cron/pg_net background jobs (§4.6)', () => {
   it('registered all three background jobs with their expected schedules', () => {

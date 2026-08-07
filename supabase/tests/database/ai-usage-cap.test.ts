@@ -8,7 +8,13 @@
  * per-day isolation -- against real Postgres, not a fake.
  */
 import { afterEach, describe, expect, it } from 'vitest';
-import { createTestUser, deleteTestUser, serviceRoleClient, type TestUser } from './helpers';
+import {
+  createTestUser,
+  deleteTestUser,
+  karachiToday,
+  serviceRoleClient,
+  type TestUser,
+} from './helpers';
 
 describe('increment_daily_ai_usage (ADR-003)', () => {
   let userA: TestUser | undefined;
@@ -53,7 +59,7 @@ describe('increment_daily_ai_usage (ADR-003)', () => {
     // Exactly one row for today, count matches the last call's return value --
     // proves the RPC is genuinely incrementing the stored row, not just
     // returning a computed value disconnected from what's persisted.
-    const today = new Date().toISOString().slice(0, 10);
+    const today = karachiToday();
     const { data: rows } = await serviceRoleClient
       .from('daily_ai_usage')
       .select('message_count')
@@ -77,7 +83,7 @@ describe('increment_daily_ai_usage (ADR-003)', () => {
 
   it('does not double-count a pre-existing row for today (ON CONFLICT DO UPDATE, not a fresh insert)', async () => {
     userA = await createTestUser();
-    const today = new Date().toISOString().slice(0, 10);
+    const today = karachiToday();
 
     // Seed a row directly, simulating an earlier call this same day.
     await serviceRoleClient

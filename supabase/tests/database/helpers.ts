@@ -95,3 +95,16 @@ export async function createTestUser(): Promise<TestUser> {
 export async function deleteTestUser(user: TestUser): Promise<void> {
   await serviceRoleClient.auth.admin.deleteUser(user.authId);
 }
+
+/** "Today" as the database's Asia/Karachi CURRENT_DATE would compute it (§5.10, G-16) --
+ * PKT is UTC+5 with no DST, so this is a fixed offset, not a real timezone conversion.
+ * Using `new Date().toISOString()` directly is UTC's today, which differs from the
+ * database's for several hours a day (verified: a CI run at 2026-08-06T23:25Z -- already
+ * 2026-08-07 in Karachi -- flipped `ai-usage-cap.test.ts` and `garden-derivation.test.ts`'s
+ * client-computed "today" a day behind the row Postgres actually wrote, failing both) --
+ * exactly the class of bug the timezone fix exists to avoid, so test fixtures have to
+ * respect it too, not just production code. Previously duplicated as a local function in
+ * cron-jobs.test.ts only; centralized here so every date-sensitive test fixture uses it. */
+export function karachiToday(): string {
+  return new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}

@@ -1,6 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createTestUser, deleteTestUser, serviceRoleClient, type TestUser } from './helpers';
+import {
+  createTestUser,
+  deleteTestUser,
+  karachiToday,
+  serviceRoleClient,
+  type TestUser,
+} from './helpers';
 
 function addDays(isoDate: string, offset: number): string {
   const date = new Date(`${isoDate}T00:00:00Z`);
@@ -367,7 +373,7 @@ describe('garden derivation engine v2 (garden mechanic v2, ADR-0026) — the hig
       .update({ goal: 'build_muscle', daily_protein_target_g: 50 })
       .eq('id', user.userId);
     const start = await backdateCycle(user.userId, 'protein', 10);
-    const today = new Date().toISOString().slice(0, 10);
+    const today = karachiToday();
 
     // A qualifying day 10 days ago, nothing logged today yet -- is_dormant_today
     // reflects whether *today* specifically met the goal, independent of

@@ -16,7 +16,13 @@
  */
 import { randomUUID } from 'node:crypto';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createTestUser, deleteTestUser, serviceRoleClient, type TestUser } from './helpers';
+import {
+  createTestUser,
+  deleteTestUser,
+  karachiToday,
+  serviceRoleClient,
+  type TestUser,
+} from './helpers';
 
 describe('candidate_recipes_for_user (ADR-0024/0027)', () => {
   let user: TestUser | undefined;
@@ -210,7 +216,7 @@ describe('recent_activity_summary (ADR-0024/0027)', () => {
 
   it('summarises logged calories, workout days, and latest weight over the last 14 days', async () => {
     user = await createTestUser();
-    const today = new Date().toISOString().slice(0, 10);
+    const today = karachiToday();
 
     await serviceRoleClient.from('food_logs').insert([
       {
