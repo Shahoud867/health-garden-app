@@ -39,16 +39,16 @@ for premium plans/chat.
 
 ## Status
 
-| Layer                        | Scope                                                                                              | State                                                                            |
-| ---------------------------- | -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| **Database**                 | Schema (22 tables), RLS, garden engine, seed data                                                  | ✅ Complete                                                                      |
-| **Edge Functions**           | Auth-adjacent (export/delete), AI (chat/plan), interim payments, background jobs                   | ✅ Complete                                                                      |
-| **Background processing**    | `pg_cron`/`pg_net`: engagement nudges, quota watchdog, payment reconciliation                      | ✅ Complete                                                                      |
-| **Web client (`frontend/`)** | Vite + React 19 + Tailwind v4, all 17 screens wired to real Supabase Auth/PostgREST/Edge Functions | ✅ Complete, unverified against a live project                                   |
-| **Real merchant payments**   | `payments-create-checkout`/`payments-webhook` (ADR-008's real-API path)                            | ⏳ Gated — no merchant account yet                                               |
-| **Production accounts**      | Sentry, PostHog, UptimeRobot, live Supabase project, Google OAuth, Cloudflare Turnstile            | ⏳ Not provisioned                                                               |
-| **Automated frontend tests** | Vitest unit suite (41 tests, mocked) + Playwright E2E suite (9 tests, real local Supabase stack)   | 🔶 Unit suite passing; E2E suite unexecuted here — no Docker in this environment |
-| React Native mobile port     | Only if the retention gate (Blueprint §13.6) clears                                                | Gated                                                                            |
+| Layer                        | Scope                                                                                              | State                                                                                           |
+| ---------------------------- | -------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| **Database**                 | Schema (22 tables), RLS, garden engine, seed data                                                  | ✅ Complete                                                                                     |
+| **Edge Functions**           | Auth-adjacent (export/delete), AI (chat/plan), interim payments, background jobs                   | ✅ Complete                                                                                     |
+| **Background processing**    | `pg_cron`/`pg_net`: engagement nudges, quota watchdog, payment reconciliation                      | ✅ Complete                                                                                     |
+| **Web client (`frontend/`)** | Vite + React 19 + Tailwind v4, all 17 screens wired to real Supabase Auth/PostgREST/Edge Functions | ✅ Complete, verified against a real local Supabase stack in CI — not yet a live hosted project |
+| **Real merchant payments**   | `payments-create-checkout`/`payments-webhook` (ADR-008's real-API path)                            | ⏳ Gated — no merchant account yet                                                              |
+| **Production accounts**      | Sentry, PostHog, UptimeRobot, live Supabase project, Google OAuth, Cloudflare Turnstile            | ⏳ Not provisioned                                                                              |
+| **Automated frontend tests** | Vitest unit suite (45 tests, mocked) + Playwright E2E suite (9 tests, real local Supabase stack)   | ✅ Both suites green in CI                                                                      |
+| React Native mobile port     | Only if the retention gate (Blueprint §13.6) clears                                                | Gated                                                                                           |
 
 The backend was built first, phase by phase, against the blueprint (§13.2) — see
 [CONTRIBUTING.md](CONTRIBUTING.md) for that history and the ADR log under `docs/adr/`. The
@@ -599,29 +599,48 @@ Two layers, `frontend/tests/`:
   a **real local Supabase stack** (the same `supabase start` pattern the backend's own database
   test suite uses, for the same reason: this is where a frontend/backend contract mismatch
   actually gets caught, not in a mock). Covers signup → onboarding → home, wrong-password login,
-  forgot-password, and a full log-a-glass-of-water round trip verified to survive a page reload
-  (proving it hit `water_logs` for real, not just local React state). Requires
+  forgot-password, a full log-a-glass-of-water round trip verified to survive a page reload
+  (proving it hit `water_logs` for real, not just local React state), and logging a weight entry
+  through to its "Saved" confirmation and updated "Current" stat. Requires
   `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY` pointed at a running local stack —
   `npm run db:start` at the repo root, then `npx supabase status -o env` for the values.
 
-**Neither suite has been executed in this environment** — no Docker/local Supabase stack is
-available here, so `npm run test:e2e` has never actually run end-to-end; correctness was verified
-as far as possible without one: `npx playwright test --list` confirms every spec file parses and
-every test is discovered (9 tests, 2 files), and every selector was checked against the exact
-JSX each screen renders (label text, ARIA labels, button text) rather than guessed. Unit tests
-**did** run, repeatedly, in this environment (no live services needed) — 41 passing, including the
-bug catch above. CI (`.github/workflows/ci.yml`'s `frontend-e2e` job) will be the first real
-execution of the E2E suite; expect to spend a debugging pass on real selector/timing issues the
-first time it runs, the normal cost of writing E2E tests against code you can't click through
-yourself first.
+**Both suites are green in CI** (`.github/workflows/ci.yml`'s `frontend`/`frontend-e2e` jobs) — 45
+unit tests and all 9 E2E tests, run against a real local Supabase stack, not mocked. Getting there
+took a real, multi-round debugging pass once CI could actually execute the E2E suite (it couldn't
+be run in the environment that originally wrote it — no Docker there), and it caught two genuine
+production bugs neither unit tests nor code review had surfaced:
 
-Also fixed as part of writing these tests: **several form `<label>` elements across
-AuthScreen/OnboardingScreen/ProfileScreen/PremiumScreen had no `htmlFor`/`id` association** —
-inherited from the original design, not introduced here, but a real accessibility gap (a screen
-reader wouldn't announce the label when the input receives focus) as well as what made
+- **`normalizeError`'s Postgrest-error duck-type check** was broad enough to also match plain
+  `Error`/`TypeError` instances (since `@supabase/postgrest-js`'s `PostgrestError` genuinely
+  extends `Error`), which meant a real network failure's "Failed to fetch" would never have
+  reached the network-error branch and its friendlier message — silently showing the raw browser
+  error to a user offline instead. Caught by the unit suite's first run. Fixed in `lib/errors.ts`.
+- **Every screen that called `refetch()` after a save could have its own local UI feedback
+  silently discarded.** `App.tsx` full-screen-blocked (unmounted) whatever screen was showing
+  whenever `useAppData`'s `loading` flag was true — but that flag flips true on _every_ call to
+  `refetch()`, not just the app's first load. A screen doing `await someWrite(); await refetch();
+setLocalSuccessFlag(true)` would get unmounted the instant `refetch()` started (before its
+  first `await`, since `setLoading(true)` runs synchronously), taking that local state with it;
+  once the refetch finished, a brand-new instance of the screen mounted with the flag back to its
+  initial value. Surfaced by the weight-logging E2E test, whose "✓ Saved" confirmation could
+  never appear no matter how long the test waited — traced from what first looked like a stalled
+  network call (worth hardening regardless — see the `withTimeout` note below) to this instead.
+  Fixed in `useAppData.ts`/`App.tsx`: a new `hasLoadedOnce` flag, sticky after the first load
+  completes, so only the true first load blocks the screen; every later `refetch()` now updates
+  data in the background without unmounting whatever triggered it.
+
+Also fixed along the way: **every direct PostgREST call and Edge Function invocation across
+`lib/api/*` had no timeout** — `supabase-js`'s underlying `fetch` has none built in, so a
+genuinely stalled connection would hang a caller's `await` (and whatever UI depends on it, like a
+disabled Save button) forever, with no error to show. Not what the E2E failure above turned out to
+be, but a real gap all the same; every call in `lib/api/*.ts` now races against a deadline via
+`lib/timeout.ts`'s `withTimeout`, throwing a normal, catchable error instead of hanging. **Several
+form `<label>` elements across AuthScreen/OnboardingScreen/ProfileScreen/PremiumScreen had no
+`htmlFor`/`id` association** too — inherited from the original design, a real accessibility gap
+(a screen reader wouldn't announce the label when the input receives focus) as well as what made
 `getByLabel()` selectors initially not work in the E2E tests. Fixed by adding matching
-`id`/`htmlFor` pairs throughout — a case where writing the tests surfaced a real product bug
-independent of testing itself.
+`id`/`htmlFor` pairs throughout.
 
 ---
 
@@ -684,20 +703,18 @@ own no-placeholders convention (see [CONTRIBUTING.md](CONTRIBUTING.md)).
 
 **Blocking a real launch:**
 
-- **Not run against a live Supabase project.** This environment has no Docker and no restored
-  cloud project, so nothing in `frontend/` has executed a real network call against real RLS
-  policies. Everything here is verified by build/typecheck/careful code review against the exact
-  migration files, not by observing it work. First real step: point `frontend/.env.local` at a
-  real (migrated) Supabase project and click through every screen once.
+- **Not run against a live (hosted) Supabase project.** Every screen has now executed real network
+  calls against real RLS policies — but against a real _local_ stack (`supabase start` in CI's
+  `frontend-e2e` job), not a live hosted project. That's the harder-to-fake gap: a local stack runs
+  the exact same schema/RLS/triggers as production, but nothing here has yet exercised a hosted
+  project's actual latency, connection pooling, or auth email delivery. First real step: point
+  `frontend/.env.local` at a real (migrated) Supabase project and click through every screen once.
 - **38 Git LFS image files are missing** (`frontend/public/plants/`, `frontend/public/themes/`,
   2 files under `src/imports/`) — the pointers were committed but the actual binary content never
   reached GitHub's LFS storage (pre-existing, from the PR that introduced this frontend; not
   something this round could reconstruct). The app runs and every screen functions correctly;
   plant/theme artwork will be broken until someone with the source images re-uploads them via
   `git lfs push`.
-- **The E2E test suite has never actually executed** — written and CI-wired, but no Docker/local
-  Supabase stack was available in this environment to run it against. Its first real run will be
-  in CI; see [Testing](#testing) above for exactly what that means and what to expect.
 - **Google OAuth and Cloudflare Turnstile are not configured** in any real account — both code
   paths are real and correct, but will error (clearly, not silently) until those accounts exist.
   See [Deployment](#deployment).
