@@ -126,6 +126,43 @@ jobs:
         if: always()
         run: npx supabase stop
 
+  frontend:
+    name: Frontend typecheck and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # frontend/ is a separate Vite/React project with its own toolchain
+    # (root eslint.config.js and .prettierignore both exclude it deliberately
+    # -- see their own comments) -- own install, own checks, no dependency on
+    # the root `quality` job's npm ci.
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install tooling
+        run: npm ci --no-audit --no-fund
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      # No VITE_SUPABASE_URL/VITE_SUPABASE_ANON_KEY secrets configured here --
+      # lib/env.ts throws at import time without them, which would fail this
+      # step immediately. Placeholder values are enough to prove the bundle
+      # itself builds correctly; runtime behaviour against a real project is
+      # not what this step verifies.
+      - name: Build
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: https://ci-placeholder.supabase.co
+          VITE_SUPABASE_ANON_KEY: ci-placeholder-anon-key
+
   secrets:
     name: Secret scan
     runs-on: ubuntu-latest
