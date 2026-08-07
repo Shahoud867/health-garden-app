@@ -296,10 +296,14 @@ export default function PremiumScreen({
             ) : (
               <div className="space-y-4">
                 <div>
-                  <label className="mb-1.5 block text-sm font-bold text-[#5f523f]">
+                  <label
+                    htmlFor="premium-tx-ref"
+                    className="mb-1.5 block text-sm font-bold text-[#5f523f]"
+                  >
                     {t("txRef", lang)}
                   </label>
                   <input
+                    id="premium-tx-ref"
                     type="text"
                     value={txRef}
                     onChange={(e) => setTxRef(e.target.value)}

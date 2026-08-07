@@ -246,10 +246,14 @@ export default function OnboardingScreen({
               />
               <div className="mt-6 space-y-4">
                 <div>
-                  <label className="mb-1.5 block text-sm font-bold text-[#5f523f]">
+                  <label
+                    htmlFor="onboarding-name"
+                    className="mb-1.5 block text-sm font-bold text-[#5f523f]"
+                  >
                     {t("name", lang)}
                   </label>
                   <input
+                    id="onboarding-name"
                     type="text"
                     value={form.name}
                     onChange={(e) => setForm({ ...form, name: e.target.value })}
@@ -259,10 +263,14 @@ export default function OnboardingScreen({
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="mb-1.5 block text-sm font-bold text-[#5f523f]">
+                    <label
+                      htmlFor="onboarding-age"
+                      className="mb-1.5 block text-sm font-bold text-[#5f523f]"
+                    >
                       {lang === "ur" ? "عمر" : "Age"}
                     </label>
                     <input
+                      id="onboarding-age"
                       type="number"
                       min="10"
                       max="100"
@@ -275,10 +283,14 @@ export default function OnboardingScreen({
                     />
                   </div>
                   <div>
-                    <label className="mb-1.5 block text-sm font-bold text-[#5f523f]">
+                    <label
+                      htmlFor="onboarding-sex"
+                      className="mb-1.5 block text-sm font-bold text-[#5f523f]"
+                    >
                       {lang === "ur" ? "جنس" : "Sex"}
                     </label>
                     <select
+                      id="onboarding-sex"
                       value={form.sex}
                       onChange={(e) =>
                         setForm({ ...form, sex: e.target.value })
@@ -296,10 +308,14 @@ export default function OnboardingScreen({
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="mb-1.5 block text-sm font-bold text-[#5f523f]">
+                    <label
+                      htmlFor="onboarding-height"
+                      className="mb-1.5 block text-sm font-bold text-[#5f523f]"
+                    >
                       {lang === "ur" ? "قد (cm)" : "Height (cm)"}
                     </label>
                     <input
+                      id="onboarding-height"
                       type="number"
                       value={form.heightCm}
                       onChange={(e) =>
@@ -310,10 +326,14 @@ export default function OnboardingScreen({
                     />
                   </div>
                   <div>
-                    <label className="mb-1.5 block text-sm font-bold text-[#5f523f]">
+                    <label
+                      htmlFor="onboarding-weight"
+                      className="mb-1.5 block text-sm font-bold text-[#5f523f]"
+                    >
                       {lang === "ur" ? "وزن (kg)" : "Weight (kg)"}
                     </label>
                     <input
+                      id="onboarding-weight"
                       type="number"
                       value={form.weightKg}
                       onChange={(e) =>

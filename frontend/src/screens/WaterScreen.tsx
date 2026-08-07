@@ -121,7 +121,10 @@ export default function WaterScreen({
             style={{ borderTopColor: "#3b8f9f", borderRightColor: "#8fd0df" }}
           >
             <div className="text-center">
-              <div className="text-[56px] font-black leading-none text-[#3b8f9f]">
+              <div
+                data-testid="water-glass-count"
+                className="text-[56px] font-black leading-none text-[#3b8f9f]"
+              >
                 {glasses}
               </div>
               <div className="mt-1 text-sm font-bold text-[#6e5d4a]">

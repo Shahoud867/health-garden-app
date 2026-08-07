@@ -250,10 +250,14 @@ export default function AuthScreen({
           <form onSubmit={handleSubmit} className="mt-7 space-y-4">
             {mode === "signup" && (
               <div>
-                <label className="mb-1.5 block text-sm font-bold text-[#5f523f]">
+                <label
+                  htmlFor="auth-name"
+                  className="mb-1.5 block text-sm font-bold text-[#5f523f]"
+                >
                   {t("name", lang)}
                 </label>
                 <input
+                  id="auth-name"
                   type="text"
                   required
                   value={name}
@@ -268,10 +272,14 @@ export default function AuthScreen({
             )}
 
             <div>
-              <label className="mb-1.5 block text-sm font-bold text-[#5f523f]">
+              <label
+                htmlFor="auth-email"
+                className="mb-1.5 block text-sm font-bold text-[#5f523f]"
+              >
                 {t("email", lang)}
               </label>
               <input
+                id="auth-email"
                 type="email"
                 required
                 value={email}
@@ -284,10 +292,14 @@ export default function AuthScreen({
 
             {mode !== "forgot-password" && (
               <div>
-                <label className="mb-1.5 block text-sm font-bold text-[#5f523f]">
+                <label
+                  htmlFor="auth-password"
+                  className="mb-1.5 block text-sm font-bold text-[#5f523f]"
+                >
                   {t("password", lang)}
                 </label>
                 <input
+                  id="auth-password"
                   type="password"
                   required
                   minLength={8}

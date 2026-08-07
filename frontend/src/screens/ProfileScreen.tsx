@@ -210,10 +210,14 @@ export default function ProfileScreen({
                   },
                 ].map((f) => (
                   <div key={f.key}>
-                    <label className="mb-1.5 block text-xs font-bold uppercase tracking-[0.16em] text-[#8b6f46]">
+                    <label
+                      htmlFor={`profile-${f.key}`}
+                      className="mb-1.5 block text-xs font-bold uppercase tracking-[0.16em] text-[#8b6f46]"
+                    >
                       {f.label}
                     </label>
                     <input
+                      id={`profile-${f.key}`}
                       type={f.type}
                       value={form[(f.key as keyof typeof form)]}
                       onChange={(e) =>
