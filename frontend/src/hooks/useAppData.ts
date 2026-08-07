@@ -24,6 +24,12 @@ import {
 } from "../lib/gardenMapping"
 import type { UserRow } from "../lib/database.types"
 import { normalizeError } from "../lib/errors"
+import { withTimeout } from "../lib/timeout"
+
+/** No individual query here should ever take this long against a healthy
+ * backend; a stalled connection otherwise hangs this whole load forever
+ * with no error a user could act on (see lib/timeout.ts's doc comment). */
+const LOAD_TIMEOUT_MS = 15_000
 
 const EMPTY_STATE_DEFAULTS: Omit<AppState, "lang" | "isLoggedIn" | "onboardingComplete" | "isPremium" | "syncStatus"> =
   {
@@ -119,7 +125,11 @@ export function useAppData(session: Session | null) {
     setLoadError(null)
     try {
       const authId = session.user.id
-      const profileRow = await getProfile(authId)
+      const profileRow = await withTimeout(
+        getProfile(authId),
+        LOAD_TIMEOUT_MS,
+        "Could not load your profile — please check your connection and try again.",
+      )
       if (!profileRow) {
         // handle_new_auth_user (migration 0005) creates this row synchronously
         // on signup -- absent here means the row genuinely hasn't landed yet
@@ -160,16 +170,20 @@ export function useAppData(session: Session | null) {
         aiUsage,
         foodEntries,
         workoutEntries,
-      ] = await Promise.all([
-        getTodayCalories(userId, today),
-        getTodayWorkoutMinutes(userId, today),
-        getTodayWaterGlasses(userId, today),
-        listWeightHistory(userId),
-        getGardenState(userId),
-        getTodayAiChatUsage(userId),
-        listFoodLogsForDate(userId, today),
-        listWorkoutLogsForDate(userId, today),
-      ])
+      ] = await withTimeout(
+        Promise.all([
+          getTodayCalories(userId, today),
+          getTodayWorkoutMinutes(userId, today),
+          getTodayWaterGlasses(userId, today),
+          listWeightHistory(userId),
+          getGardenState(userId),
+          getTodayAiChatUsage(userId),
+          listFoodLogsForDate(userId, today),
+          listWorkoutLogsForDate(userId, today),
+        ]),
+        LOAD_TIMEOUT_MS,
+        "Could not load your data — please check your connection and try again.",
+      )
 
       const garden: PlantState[] = GOAL_TYPE_ORDER.map((goalType) => {
         const row = gardenRows.find((g) => g.goal_type === goalType)
