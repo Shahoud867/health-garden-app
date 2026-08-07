@@ -1,6 +1,7 @@
 import { FunctionsHttpError } from "@supabase/supabase-js"
 import { supabase } from "../supabase"
 import { AppError, normalizeError } from "../errors"
+import { withTimeout, FUNCTION_TIMEOUT_MS } from "../timeout"
 
 /**
  * Calls a custom Edge Function (§6.2) and unwraps its `{error, message}`
@@ -10,16 +11,25 @@ import { AppError, normalizeError } from "../errors"
  *
  * `supabase.functions.invoke` already attaches the caller's JWT from the
  * persisted session automatically; nothing here handles auth headers.
+ *
+ * Wrapped in `withTimeout` -- this is the single chokepoint every Edge
+ * Function call (ai-chat, ai-plan-generate, payments-submit-intent,
+ * account-export, account-delete) goes through, so one wrap covers all of
+ * them (see lib/timeout.ts's doc comment for why this exists at all).
  */
 export async function invokeFunction<TResponse>(
   name: string,
   body?: Record<string, unknown>,
   options?: { method?: "GET" | "POST" },
 ): Promise<TResponse> {
-  const { data, error } = await supabase.functions.invoke<TResponse>(name, {
-    body,
-    method: options?.method,
-  })
+  const { data, error } = await withTimeout(
+    supabase.functions.invoke<TResponse>(name, {
+      body,
+      method: options?.method,
+    }),
+    FUNCTION_TIMEOUT_MS,
+    "The server took too long to respond — please check your connection and try again.",
+  )
 
   if (error) {
     if (error instanceof FunctionsHttpError) {

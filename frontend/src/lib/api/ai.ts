@@ -2,6 +2,7 @@ import { supabase } from "../supabase"
 import { normalizeError } from "../errors"
 import { invokeFunction } from "./client"
 import { todayLocalDate } from "../date"
+import { withTimeout, QUERY_TIMEOUT_MS } from "../timeout"
 import type { PlanType } from "../database.types"
 
 /**
@@ -18,12 +19,16 @@ export const AI_CHAT_DAILY_CAP_DEFAULT = 15
 export const AI_PLAN_REGENERATION_CAP_DEFAULT = 2
 
 export async function getTodayAiChatUsage(userId: string): Promise<number> {
-  const { data, error } = await supabase
-    .from("daily_ai_usage")
-    .select("message_count")
-    .eq("user_id", userId)
-    .eq("usage_date", todayLocalDate())
-    .maybeSingle()
+  const { data, error } = await withTimeout(
+    supabase
+      .from("daily_ai_usage")
+      .select("message_count")
+      .eq("user_id", userId)
+      .eq("usage_date", todayLocalDate())
+      .maybeSingle(),
+    QUERY_TIMEOUT_MS,
+    "Could not load your AI chat usage — please check your connection and try again.",
+  )
   if (error) throw normalizeError(error)
   return (data as { message_count: number } | null)?.message_count ?? 0
 }
@@ -33,13 +38,17 @@ export async function getPlanRegenerationsUsed(
   planType: PlanType,
   periodStart: string,
 ): Promise<number> {
-  const { data, error } = await supabase
-    .from("ai_plans")
-    .select("regenerations_used")
-    .eq("user_id", userId)
-    .eq("plan_type", planType)
-    .eq("period_start", periodStart)
-    .maybeSingle()
+  const { data, error } = await withTimeout(
+    supabase
+      .from("ai_plans")
+      .select("regenerations_used")
+      .eq("user_id", userId)
+      .eq("plan_type", planType)
+      .eq("period_start", periodStart)
+      .maybeSingle(),
+    QUERY_TIMEOUT_MS,
+    "Could not load your plan usage — please check your connection and try again.",
+  )
   if (error) throw normalizeError(error)
   return (
     (data as { regenerations_used: number } | null)?.regenerations_used ?? 0
@@ -51,17 +60,24 @@ export async function getLatestAiPlan(
   userId: string,
   planType: PlanType,
 ): Promise<{ text: string; periodStart: string } | null> {
-  const { data, error } = await supabase
-    .from("ai_plans")
-    .select("plan_content, period_start")
-    .eq("user_id", userId)
-    .eq("plan_type", planType)
-    .order("generated_at", { ascending: false })
-    .limit(1)
-    .maybeSingle()
+  const { data, error } = await withTimeout(
+    supabase
+      .from("ai_plans")
+      .select("plan_content, period_start")
+      .eq("user_id", userId)
+      .eq("plan_type", planType)
+      .order("generated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    QUERY_TIMEOUT_MS,
+    "Could not load your plan — please check your connection and try again.",
+  )
   if (error) throw normalizeError(error)
   if (!data) return null
-  const row = data as { plan_content: { text?: string }; period_start: string }
+  const row = data as {
+    plan_content: { text?: string }
+    period_start: string
+  }
   return { text: row.plan_content?.text ?? "", periodStart: row.period_start }
 }
 

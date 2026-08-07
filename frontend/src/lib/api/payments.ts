@@ -1,6 +1,7 @@
 import { supabase } from "../supabase"
 import { normalizeError } from "../errors"
 import { invokeFunction } from "./client"
+import { withTimeout, QUERY_TIMEOUT_MS } from "../timeout"
 import type { PaymentMethod, SubscriptionRow } from "../database.types"
 
 /**
@@ -27,14 +28,18 @@ export async function submitPaymentIntent(
 export async function getActiveSubscription(
   userId: string,
 ): Promise<SubscriptionRow | null> {
-  const { data, error } = await supabase
-    .from("subscriptions")
-    .select("*")
-    .eq("user_id", userId)
-    .eq("status", "active")
-    .order("current_period_end", { ascending: false })
-    .limit(1)
-    .maybeSingle()
+  const { data, error } = await withTimeout(
+    supabase
+      .from("subscriptions")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("status", "active")
+      .order("current_period_end", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    QUERY_TIMEOUT_MS,
+    "Could not load your subscription — please check your connection and try again.",
+  )
   if (error) throw normalizeError(error)
   return data as SubscriptionRow | null
 }
@@ -49,13 +54,17 @@ export interface PaymentIntentStatusRow {
 export async function getLatestPaymentIntent(
   userId: string,
 ): Promise<PaymentIntentStatusRow | null> {
-  const { data, error } = await supabase
-    .from("payment_intents")
-    .select("id, status, amount_pkr, created_at")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle()
+  const { data, error } = await withTimeout(
+    supabase
+      .from("payment_intents")
+      .select("id, status, amount_pkr, created_at")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    QUERY_TIMEOUT_MS,
+    "Could not load your payment status — please check your connection and try again.",
+  )
   if (error) throw normalizeError(error)
   return data as PaymentIntentStatusRow | null
 }
