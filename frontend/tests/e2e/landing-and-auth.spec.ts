@@ -13,8 +13,10 @@ test.describe("Landing page", () => {
     await expect(
       page.getByRole("heading", { name: /a garden that grows with you/i }),
     ).toBeVisible()
+    // LandingScreen.tsx repeats this CTA deliberately (hero + free-plan
+    // panel) -- see the identical note in helpers.ts's signUpNewUser.
     await expect(
-      page.getByRole("button", { name: /start growing/i }),
+      page.getByRole("button", { name: /start growing/i }).first(),
     ).toBeVisible()
     await expect(
       page.getByRole("button", { name: /see all features/i }),
@@ -84,7 +86,14 @@ test.describe("Sign up and log in", () => {
     await expect(emailField).toBeVisible({ timeout: 10_000 })
     await emailField.fill(uniqueTestEmail())
 
-    const submitButton = page.getByRole("button", { name: "Submit" })
+    // AuthScreen's submit button reuses `titles[mode]` for its own label,
+    // not a generic "Submit" -- for forgot-password mode that's
+    // t('forgotPassword', lang) with the "?" stripped, i.e. "Forgot
+    // password" (no question mark). Scoped to type="submit" since the
+    // "Forgot password?" *link* (with the "?", on the login screen this
+    // test already navigated away from) would otherwise be a same-text
+    // near-miss for a looser query.
+    const submitButton = page.locator('button[type="submit"]')
     await expect(submitButton).toBeEnabled()
     await submitButton.click()
 

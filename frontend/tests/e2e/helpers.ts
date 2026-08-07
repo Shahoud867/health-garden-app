@@ -36,8 +36,15 @@ export async function signUpNewUser(page: Page, email: string): Promise<void> {
   // Either lands on onboarding immediately (confirmations off) or on the
   // "check your email" screen (confirmations on) -- fail loudly either way
   // if neither shows up, rather than silently timing out ambiguously.
+  // Onboarding *opens* on its disclaimer step (OnboardingScreen.tsx's
+  // STEPS starts at 'disclaimer', not 'profile') -- "Build your baseline"
+  // only appears one step later, after "I understand -- continue" is
+  // clicked, so it was never actually visible at this point and was a
+  // wrong assumption to check for here. getByText (not getByRole) since
+  // "I understand..." is a button's text but "Check your email" is a
+  // heading's -- this needs to match either regardless of role.
   await expect(
-    page.getByText(/build your baseline|check your email/i).first(),
+    page.getByText(/I understand|check your email/i).first(),
   ).toBeVisible({ timeout: 15_000 })
 }
 
