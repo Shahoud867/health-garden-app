@@ -1,5 +1,5 @@
-import type { Page } from '@playwright/test'
-import { expect } from '@playwright/test'
+import type { Page } from "@playwright/test"
+import { expect } from "@playwright/test"
 
 /** Matches the backend DB test suite's own unique-email convention
  * (supabase/tests/database/helpers.ts's createTestUser) so a human
@@ -11,7 +11,7 @@ export function uniqueTestEmail(): string {
   return `e2e-${Date.now()}-${counter}@example.test`
 }
 
-export const TEST_PASSWORD = 'Test-password-1234!'
+export const TEST_PASSWORD = "Test-password-1234!"
 
 /**
  * Signs up a brand-new user through the real UI and waits for the redirect
@@ -20,12 +20,19 @@ export const TEST_PASSWORD = 'Test-password-1234!'
  * assumption the backend's own DB test suite already makes.
  */
 export async function signUpNewUser(page: Page, email: string): Promise<void> {
-  await page.goto('/')
-  await page.getByRole('button', { name: /start growing/i }).click()
-  await page.getByLabel('Full Name').fill('Test User')
-  await page.getByLabel('Email').fill(email)
-  await page.getByLabel('Password').fill(TEST_PASSWORD)
-  await page.getByRole('button', { name: 'Sign Up' }).click()
+  await page.goto("/")
+  // LandingScreen.tsx repeats the "Start growing — it's free" CTA
+  // deliberately (once near the hero, once in the free-plan panel further
+  // down) -- real, intentional UI, not a bug. .first() picks the hero one;
+  // either resolves the same navigate('signup') handler.
+  await page
+    .getByRole("button", { name: /start growing/i })
+    .first()
+    .click()
+  await page.getByLabel("Full Name").fill("Test User")
+  await page.getByLabel("Email").fill(email)
+  await page.getByLabel("Password").fill(TEST_PASSWORD)
+  await page.getByRole("button", { name: "Sign Up" }).click()
   // Either lands on onboarding immediately (confirmations off) or on the
   // "check your email" screen (confirmations on) -- fail loudly either way
   // if neither shows up, rather than silently timing out ambiguously.
@@ -36,27 +43,27 @@ export async function signUpNewUser(page: Page, email: string): Promise<void> {
 
 /** Completes every onboarding step with fixed, valid values. */
 export async function completeOnboarding(page: Page): Promise<void> {
-  await page.getByRole('button', { name: /I understand/i }).click()
+  await page.getByRole("button", { name: /I understand/i }).click()
 
   // Step: profile -- OnboardingScreen labels this field with t('name', lang),
   // same as AuthScreen's signup form ("Full Name"), not "Name".
-  await page.getByLabel('Full Name').fill('Test User')
-  await page.getByLabel('Age').fill('28')
-  await page.getByLabel('Height (cm)').fill('170')
-  await page.getByLabel('Weight (kg)').fill('68')
-  await page.getByRole('button', { name: 'Continue' }).click()
+  await page.getByLabel("Full Name").fill("Test User")
+  await page.getByLabel("Age").fill("28")
+  await page.getByLabel("Height (cm)").fill("170")
+  await page.getByLabel("Weight (kg)").fill("68")
+  await page.getByRole("button", { name: "Continue" }).click()
 
   // Step: activity
-  await page.getByText('Moderately active', { exact: true }).click()
-  await page.getByRole('button', { name: 'Continue' }).click()
+  await page.getByText("Moderately active", { exact: true }).click()
+  await page.getByRole("button", { name: "Continue" }).click()
 
   // Step: goal
-  await page.getByText('General health', { exact: true }).click()
-  await page.getByRole('button', { name: 'Continue' }).click()
+  await page.getByText("General health", { exact: true }).click()
+  await page.getByRole("button", { name: "Continue" }).click()
 
   // Step: conditions -- "None of these" is selected by default, just continue.
-  await page.getByRole('button', { name: 'Continue' }).click()
+  await page.getByRole("button", { name: "Continue" }).click()
 
   // Step: targets (final)
-  await page.getByRole('button', { name: /start my garden/i }).click()
+  await page.getByRole("button", { name: /start my garden/i }).click()
 }
