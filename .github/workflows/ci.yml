@@ -152,6 +152,17 @@ jobs:
       - name: Typecheck
         run: npx tsc --noEmit
 
+      # Unit tests (Vitest + Testing Library) mock the Supabase client
+      # entirely -- no live project or Docker needed, unlike frontend-e2e
+      # below. Placeholder VITE_ values satisfy lib/env.ts's fail-fast check
+      # at import time (vitest.config.ts's test.env already sets these for
+      # local runs; CI needs them too since this step runs outside Vitest).
+      - name: Unit tests
+        run: npm test
+        env:
+          VITE_SUPABASE_URL: https://ci-placeholder.supabase.co
+          VITE_SUPABASE_ANON_KEY: ci-placeholder-anon-key
+
       # No VITE_SUPABASE_URL/VITE_SUPABASE_ANON_KEY secrets configured here --
       # lib/env.ts throws at import time without them, which would fail this
       # step immediately. Placeholder values are enough to prove the bundle
@@ -162,6 +173,61 @@ jobs:
         env:
           VITE_SUPABASE_URL: https://ci-placeholder.supabase.co
           VITE_SUPABASE_ANON_KEY: ci-placeholder-anon-key
+
+  frontend-e2e:
+    name: Frontend E2E (Playwright, real local Supabase stack)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # Root-level Supabase CLI (same one the `database` job uses), not
+      # frontend/'s own npm install -- the local stack is project-wide
+      # infrastructure, unrelated to which package happens to consume it.
+      - name: Install root tooling (Supabase CLI)
+        run: npm ci --no-audit --no-fund
+
+      - name: Start local Supabase stack
+        run: npx supabase start
+
+      # See the `database` job's identical step for why `eval` is used
+      # instead of appending supabase status -o env's output directly.
+      - name: Export local stack credentials as Vite env vars
+        run: |
+          eval "$(npx supabase status -o env)"
+          {
+            echo "VITE_SUPABASE_URL=$API_URL"
+            echo "VITE_SUPABASE_ANON_KEY=$ANON_KEY"
+          } >> "$GITHUB_ENV"
+
+      - name: Install frontend tooling
+        working-directory: frontend
+        run: npm ci --no-audit --no-fund
+
+      - name: Install Playwright's Chromium
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Run E2E tests
+        working-directory: frontend
+        run: npm run test:e2e
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: frontend/playwright-report/
+          retention-days: 14
+
+      - name: Stop local Supabase stack
+        if: always()
+        run: npx supabase stop
 
   secrets:
     name: Secret scan
