@@ -158,22 +158,31 @@ export default function WeightScreen({
               label: lang === "ur" ? "موجودہ" : "Current",
               val: `${latestWeight}kg`,
               color: "#2c2418",
+              testid: "weight-current",
             },
             {
               label: lang === "ur" ? "ابتدائی" : "Start",
               val: `${startWeight}kg`,
               color: "#6e5d4a",
+              testid: "weight-start",
             },
             {
               label: lang === "ur" ? "تبدیلی" : "Change",
               val: `${delta >= 0 ? "+" : ""}${delta.toFixed(1)}kg`,
               color: delta <= 0 ? "#6c9e36" : "#d96d20",
+              testid: "weight-change",
             },
+            // "Current" and "Start" render the exact same text for a
+            // first-ever weight log (history has just the one entry, so
+            // history[0] *is* today's) -- distinct testids, not shared
+            // text, are what let a caller (or a test) tell these apart
+            // unambiguously regardless of that coincidence.
           ].map((s) => (
             <Panel key={s.label} className="px-3 py-4 text-center">
               <div
                 className="text-[18px] font-black"
                 style={{ color: s.color }}
+                data-testid={s.testid}
               >
                 {s.val}
               </div>

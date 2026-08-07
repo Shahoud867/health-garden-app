@@ -119,5 +119,9 @@ test('logging a weight entry shows the saved confirmation and updates the "Curre
       'Weight save failed -- error toast shown instead of the "Saved" confirmation.',
     )
   }
-  await expect(page.getByText("71.5kg")).toBeVisible()
+  // For a first-ever weight log, "Current" and "Start" render the exact
+  // same text (history has just the one entry, so history[0] *is* today's)
+  // -- a bare getByText("71.5kg") is a strict-mode violation (matches both
+  // panels). weight-current is the one this test actually cares about.
+  await expect(page.getByTestId("weight-current")).toHaveText("71.5kg")
 })
