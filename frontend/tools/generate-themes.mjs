@@ -11,12 +11,12 @@
  * This script only writes coordinates -- it does not copy images, so the
  * repository never carries a second copy of the artwork.
  */
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import fs from "node:fs"
+import path from "node:path"
+import { fileURLToPath } from "node:url"
 
-const HERE = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.join(HERE, '..');
+const HERE = path.dirname(fileURLToPath(import.meta.url))
+const ROOT = path.join(HERE, "..")
 
 /**
  * Per-theme corrections applied on top of the captured coordinates. Kept
@@ -26,8 +26,8 @@ const ROOT = path.join(HERE, '..');
 const ADJUSTMENTS = {
   // The back row of markers sat on a cast shadow rather than a planting row,
   // pushing the whole grid forward until the front row overlapped the fence.
-  'back garden': { yOffset: -3.5 },
-};
+  "back garden": { yOffset: -3.5 },
+}
 
 /**
  * Plant render size as a multiple of the default, for themes whose plot is
@@ -35,44 +35,44 @@ const ADJUSTMENTS = {
  */
 const PLANT_SCALE = {
   greenhouse: 0.78,
-};
+}
 
-const slug = (n) => n.toLowerCase().replace(/\s+/g, '-');
-const title = (n) => n.replace(/\b\w/g, (c) => c.toUpperCase());
-const round = (n) => Math.round(n * 100) / 100;
+const slug = (n) => n.toLowerCase().replace(/\s+/g, "-")
+const title = (n) => n.replace(/\b\w/g, (c) => c.toUpperCase())
+const round = (n) => Math.round(n * 100) / 100
 
-const data = JSON.parse(fs.readFileSync(path.join(HERE, 'slots.json'), 'utf8'));
-const entries = [];
+const data = JSON.parse(fs.readFileSync(path.join(HERE, "slots.json"), "utf8"))
+const entries = []
 
 for (const [name, info] of Object.entries(data)) {
-  const s = slug(name);
+  const s = slug(name)
 
   if (info.slots.length !== 25) {
-    throw new Error(`${name}: expected 25 slots, got ${info.slots.length}`);
+    throw new Error(`${name}: expected 25 slots, got ${info.slots.length}`)
   }
 
-  const field = path.join(ROOT, 'public', 'themes', s, 'field.png');
+  const field = path.join(ROOT, "public", "themes", s, "field.png")
   if (!fs.existsSync(field)) {
-    throw new Error(`${name}: no field art at public/themes/${s}/field.png`);
+    throw new Error(`${name}: no field art at public/themes/${s}/field.png`)
   }
 
-  const adj = ADJUSTMENTS[name] ?? {};
+  const adj = ADJUSTMENTS[name] ?? {}
   const slots = info.slots.map((p) => ({
     x: round(p.x + (adj.xOffset ?? 0)),
     y: round(p.y + (adj.yOffset ?? 0)),
-  }));
+  }))
 
-  const scale = PLANT_SCALE[s];
+  const scale = PLANT_SCALE[s]
   entries.push(`  {
     slug: '${s}',
     name: '${title(name)}',
     fieldImage: '/themes/${s}/field.png',
     fieldWidth: ${info.width},
-    fieldHeight: ${info.height},${scale ? `\n    plantScale: ${scale},` : ''}
+    fieldHeight: ${info.height},${scale ? `\n    plantScale: ${scale},` : ""}
     slots: [
-${slots.map((p) => `      { x: ${p.x}, y: ${p.y} },`).join('\n')}
+${slots.map((p) => `      { x: ${p.x}, y: ${p.y} },`).join("\n")}
     ],
-  },`);
+  },`)
 }
 
 const out = `// GENERATED FILE -- do not edit by hand.
@@ -99,7 +99,7 @@ export interface GardenTheme {
  * index order *is* planting order (back row first, left to right).
  */
 export const GARDEN_THEMES: GardenTheme[] = [
-${entries.join('\n')}
+${entries.join("\n")}
 ];
 
 /** The theme the Garden screen shows. Swap the slug to change it. */
@@ -108,7 +108,7 @@ export const DEFAULT_THEME_SLUG = 'main-garden';
 export function themeBySlug(slug: string): GardenTheme {
   return GARDEN_THEMES.find((t) => t.slug === slug) ?? GARDEN_THEMES[0];
 }
-`;
+`
 
-fs.writeFileSync(path.join(ROOT, 'src/data/gardenThemes.ts'), out);
-console.log(`themes: ${entries.length}`);
+fs.writeFileSync(path.join(ROOT, "src/data/gardenThemes.ts"), out)
+console.log(`themes: ${entries.length}`)

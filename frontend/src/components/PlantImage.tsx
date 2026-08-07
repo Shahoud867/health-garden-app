@@ -1,7 +1,7 @@
-import type { PlantState } from '../types'
+import type { PlantState } from "../types"
 
 /** The five plant kinds, taken from the app's own state shape. */
-type PlantType = PlantState['type']
+type PlantType = PlantState["type"]
 
 /**
  * Renders the illustrated plant artwork from public/plants/.
@@ -19,7 +19,7 @@ export default function PlantImage({
   stage,
   dormant = false,
   size = 64,
-  className = '',
+  className = "",
 }: {
   plant: PlantType
   stage: 0 | 1 | 2 | 3
@@ -35,13 +35,13 @@ export default function PlantImage({
       draggable={false}
       style={{
         height: size,
-        width: 'auto',
+        width: "auto",
         // Resting plants read as quietly waiting, never as failing -- matches
         // the "plants rest, never wilt" rule the rest of the app follows.
         filter: dormant
-          ? 'saturate(0.5) brightness(1.04) drop-shadow(0 2px 3px rgba(44,36,24,0.14))'
-          : 'drop-shadow(0 2px 4px rgba(44,36,24,0.18))',
-        transition: 'filter 0.4s ease',
+          ? "saturate(0.5) brightness(1.04) drop-shadow(0 2px 3px rgba(44,36,24,0.14))"
+          : "drop-shadow(0 2px 4px rgba(44,36,24,0.18))",
+        transition: "filter 0.4s ease",
       }}
       className={className}
     />

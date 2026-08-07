@@ -1,107 +1,129 @@
-import { useEffect, useState } from 'react'
-import type { Screen, Lang, AppState } from './types'
-import BottomNav from './components/BottomNav'
-import LandingScreen from './screens/LandingScreen'
-import AuthScreen from './screens/AuthScreen'
-import OnboardingScreen from './screens/OnboardingScreen'
-import HomeScreen from './screens/HomeScreen'
-import FoodScreen from './screens/FoodScreen'
-import WorkoutScreen from './screens/WorkoutScreen'
-import WaterScreen from './screens/WaterScreen'
-import WeightScreen from './screens/WeightScreen'
-import GardenScreen from './screens/GardenScreen'
-import AICoachScreen from './screens/AICoachScreen'
-import AIPlanScreen from './screens/AIPlanScreen'
-import PremiumScreen from './screens/PremiumScreen'
-import PricingScreen from './screens/PricingScreen'
-import ProfileScreen from './screens/ProfileScreen'
-import LegalScreen from './screens/LegalScreen'
+import { useEffect, useState } from "react"
+import type { Screen, Lang } from "./types"
+import { AuthProvider, useAuth } from "./hooks/useAuth"
+import { ToastProvider, useToast } from "./hooks/useToast"
+import { ErrorBoundary } from "./components/ErrorBoundary"
+import { FullScreenLoading } from "./components/Loading"
+import { useAppData } from "./hooks/useAppData"
+import { signOut } from "./lib/api/auth"
+import { updateProfile } from "./lib/api/profile"
+import type { Goal } from "./lib/database.types"
+import BottomNav from "./components/BottomNav"
+import LandingScreen from "./screens/LandingScreen"
+import AuthScreen from "./screens/AuthScreen"
+import OnboardingScreen from "./screens/OnboardingScreen"
+import HomeScreen from "./screens/HomeScreen"
+import FoodScreen from "./screens/FoodScreen"
+import WorkoutScreen from "./screens/WorkoutScreen"
+import WaterScreen from "./screens/WaterScreen"
+import WeightScreen from "./screens/WeightScreen"
+import GardenScreen from "./screens/GardenScreen"
+import AICoachScreen from "./screens/AICoachScreen"
+import AIPlanScreen from "./screens/AIPlanScreen"
+import PremiumScreen from "./screens/PremiumScreen"
+import PricingScreen from "./screens/PricingScreen"
+import ProfileScreen from "./screens/ProfileScreen"
+import LegalScreen from "./screens/LegalScreen"
+import type { AppState } from "./types"
 
-const INITIAL_STATE: AppState = {
-  lang: 'en',
-  isPremium: false,
-  syncStatus: 'synced',
-  onboardingComplete: false,
-  isLoggedIn: false,
-  user: {
-    name: '',
-    age: 25,
-    sex: 'female',
-    heightCm: 165,
-    weightKg: 65,
-    activityLevel: 'moderate',
-    goal: 'general_health',
-    conditions: [],
-    calorieTarget: 1800,
-    proteinTarget: 104,
-  },
-  today: {
-    caloriesLogged: 480,
-    waterGlasses: 3,
-    workoutMinutes: 0,
-    foodEntries: [
-      { id: '1', name: 'Paratha', nameUr: 'پراٹھا', slot: 'breakfast', unit: 'piece', qty: 2, calories: 520, protein: 12 },
-    ],
-    workoutEntries: [],
-    weightLog: null,
-  },
-  garden: [
-    { type: 'cactus',     goal: 'Sugar-free days', goalUr: 'شکر سے پاک دن', cycleDays: 1, metToday: true  },
-    { type: 'sunflower',  goal: 'Movement',         goalUr: 'ورزش',           cycleDays: 0, metToday: false },
-    { type: 'bellflower', goal: 'Hydration',         goalUr: 'پانی',           cycleDays: 2, metToday: true  },
-    { type: 'bamboo',     goal: 'Protein',           goalUr: 'پروٹین',         cycleDays: 1, metToday: false },
-    { type: 'succulent',  goal: 'Consistency',       goalUr: 'مستقل مزاجی',   cycleDays: 2, metToday: true  },
-  ],
-  weightHistory: [
-    { date: '2025-06-01', weight: 67.2 },
-    { date: '2025-06-08', weight: 66.8 },
-    { date: '2025-06-15', weight: 66.1 },
-    { date: '2025-06-22', weight: 65.6 },
-    { date: '2025-06-29', weight: 65.2 },
-  ],
-  aiChat: {
-    messages: [],
-    usedToday: 0,
-    dailyCap: 15,
-    enabled: true,
-  },
-  aiPlan: {
-    plan: null,
-    regenUsed: 0,
-    regenCap: 2,
-  },
-}
+const AUTH_SCREENS: Screen[] = [
+  "landing",
+  "login",
+  "signup",
+  "forgot-password",
+  "email-verify",
+  "pricing",
+]
+const APP_SCREENS: Screen[] = [
+  "home",
+  "food",
+  "workout",
+  "water",
+  "weight",
+  "garden",
+  "garden-history",
+  "ai-coach",
+  "ai-plan",
+  "premium",
+  "profile",
+]
 
-const AUTH_SCREENS: Screen[] = ['landing', 'login', 'signup', 'forgot-password', 'email-verify', 'pricing']
-const APP_SCREENS: Screen[] = ['home', 'food', 'workout', 'water', 'weight', 'garden', 'garden-history', 'ai-coach', 'ai-plan', 'premium', 'profile']
-
-export default function App() {
-  const [screen, setScreen] = useState<Screen>('landing')
-  const [state, setStateRaw] = useState<AppState>(INITIAL_STATE)
-
-  const setState = (patch: Partial<AppState>) => setStateRaw(prev => ({ ...prev, ...patch }))
+function AppShell() {
+  const { session, loading: authLoading } = useAuth()
+  const {
+    state: data,
+    setState: setData,
+    profile,
+    loading: dataLoading,
+    loadError,
+    refetch,
+  } = useAppData(session)
+  // The id every logging table's user_id actually references (users.id) --
+  // distinct from session.user.id (auth.users.id / auth_id). Passing the
+  // wrong one silently breaks RLS-scoped inserts, so this is the single
+  // source every screen reads from, never session.user.id directly.
+  const userId = profile?.id ?? ""
+  const { showToast } = useToast()
+  const [screen, setScreen] = useState<Screen>("landing")
+  const [lang, setLangRaw] = useState<Lang>("en")
 
   const navigate = (s: Screen) => setScreen(s)
 
-  // Every screen is rendered into the same scroll container, so without this
-  // a new screen inherits the previous one's scroll position -- tapping
-  // "Privacy Policy" in the footer would open the document halfway down.
   useEffect(() => {
     window.scrollTo(0, 0)
   }, [screen])
 
-  const { lang } = state
+  // Real signal, not decorative: every write in this app is an awaited
+  // round trip (no offline queue exists yet -- see README's "Remaining
+  // work"), so "pending" never applies here. "Offline" reflects the
+  // browser's actual connectivity; a write attempted while offline still
+  // surfaces its own error toast from the screen that made it.
+  useEffect(() => {
+    const goOnline = () => setData({ syncStatus: "synced" })
+    const goOffline = () => setData({ syncStatus: "offline" })
+    window.addEventListener("online", goOnline)
+    window.addEventListener("offline", goOffline)
+    if (!navigator.onLine) goOffline()
+    return () => {
+      window.removeEventListener("online", goOnline)
+      window.removeEventListener("offline", goOffline)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Reactive redirect once a session resolves (login/signup succeeded, or a
+  // persisted session was restored on boot) -- screens call the real auth
+  // API directly and never navigate themselves on success; this is the one
+  // place that decides where a freshly-authenticated user lands.
+  useEffect(() => {
+    if (authLoading || dataLoading) return
+    if (data.isLoggedIn && AUTH_SCREENS.includes(screen)) {
+      navigate(data.onboardingComplete ? "home" : "onboarding")
+    }
+    if (!data.isLoggedIn && APP_SCREENS.includes(screen)) {
+      navigate("landing")
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-run on
+    // the values that should trigger a redirect, not on every `screen` change
+    // this effect itself causes.
+  }, [data.isLoggedIn, data.onboardingComplete, authLoading, dataLoading])
+
+  useEffect(() => {
+    if (loadError) showToast(loadError, "error")
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadError])
 
   const setLang = (l: Lang) => {
-    setState({ lang: l })
-    document.documentElement.dir = l === 'ur' ? 'rtl' : 'ltr'
+    setLangRaw(l)
+    document.documentElement.dir = l === "ur" ? "rtl" : "ltr"
     document.documentElement.lang = l
   }
 
-  const isLoggedIn = state.isLoggedIn
-  const onboardingComplete = state.onboardingComplete
-  const isPremium = state.isPremium
-  const showNav = isLoggedIn && onboardingComplete && APP_SCREENS.includes(screen)
+  const isLoggedIn = data.isLoggedIn
+  const onboardingComplete = data.onboardingComplete
+  const isPremium = data.isPremium
+  const showNav =
+    isLoggedIn && onboardingComplete && APP_SCREENS.includes(screen)
 
   const navProps = {
     navigate,
@@ -109,117 +131,223 @@ export default function App() {
     lang,
     setLang,
     isPremium,
-    syncStatus: state.syncStatus,
+    syncStatus: data.syncStatus,
   }
 
-  const onAuth = () => {
-    setState({ isLoggedIn: true })
-    navigate('onboarding')
+  const onOnboardingComplete = async (user: AppState["user"]) => {
+    if (!session) return
+    try {
+      await updateProfile(session.user.id, {
+        full_name: user.name,
+        age: user.age,
+        sex: user.sex,
+        height_cm: user.heightCm,
+        weight_kg: user.weightKg,
+        activity_level: user.activityLevel,
+        // OnboardingScreen only ever assigns one of users.goal's five valid
+        // CHECK values (0003_users.sql) -- AppState.user.goal is a bare
+        // `string` for backward-compat with the pre-integration mock, so
+        // this narrows to the real column type.
+        goal: user.goal as Goal,
+        conditions: user.conditions.join(","),
+        daily_calorie_target: user.calorieTarget,
+        daily_protein_target_g: user.proteinTarget,
+      })
+      await refetch()
+      navigate("home")
+    } catch (err) {
+      showToast(
+        err instanceof Error ? err.message : "Could not save your profile.",
+        "error",
+      )
+    }
   }
 
-  const onOnboardingComplete = (user: AppState['user']) => {
-    setState({ user, onboardingComplete: true })
-    navigate('home')
+  const onLogout = async () => {
+    try {
+      await signOut()
+    } catch {
+      // Sign-out failing client-side (e.g. offline) shouldn't trap the user
+      // on the profile screen -- the local session is cleared either way
+      // once onAuthStateChange fires, so proceed to the landing screen.
+    }
+    navigate("landing")
   }
 
-  const onLogout = () => {
-    setStateRaw(INITIAL_STATE)
-    navigate('landing')
+  // First-ever boot only: the persisted-session check hasn't resolved yet,
+  // so we don't know if this is a logged-in user or a fresh visitor. Once
+  // resolved, per-screen loading (skeletons) takes over instead of a
+  // full-screen blocker on every subsequent data refresh.
+  if (authLoading) {
+    return <FullScreenLoading />
   }
 
   const renderScreen = () => {
-    // Guard: must be logged in for app screens
     if (!isLoggedIn && APP_SCREENS.includes(screen)) {
-      navigate('login')
-      return null
+      return null // the redirect effect above handles navigation
     }
-    // Guard: must complete onboarding
-    if (isLoggedIn && !onboardingComplete && screen !== 'onboarding') {
-      return <OnboardingScreen {...navProps} onComplete={onOnboardingComplete}/>
+    if (isLoggedIn && dataLoading && screen !== "onboarding") {
+      return <FullScreenLoading />
+    }
+    if (
+      isLoggedIn &&
+      !onboardingComplete &&
+      screen !== "onboarding" &&
+      APP_SCREENS.includes(screen)
+    ) {
+      return (
+        <OnboardingScreen {...navProps} onComplete={onOnboardingComplete} />
+      )
     }
 
     switch (screen) {
-      case 'landing':
-        return <LandingScreen {...navProps}/>
+      case "landing":
+        return <LandingScreen {...navProps} />
 
-      case 'pricing':
-        return <PricingScreen {...navProps}/>
+      case "pricing":
+        return <PricingScreen {...navProps} />
 
-      case 'login':
-        return <AuthScreen {...navProps} mode="login" onAuth={onAuth}/>
+      case "login":
+        return <AuthScreen {...navProps} mode="login" onAuth={() => {}} />
 
-      case 'signup':
-        return <AuthScreen {...navProps} mode="signup" onAuth={onAuth}/>
+      case "signup":
+        return <AuthScreen {...navProps} mode="signup" onAuth={() => {}} />
 
-      case 'forgot-password':
-        return <AuthScreen {...navProps} mode="forgot-password" onAuth={onAuth}/>
+      case "forgot-password":
+        return (
+          <AuthScreen {...navProps} mode="forgot-password" onAuth={() => {}} />
+        )
 
-      case 'email-verify':
-        return <AuthScreen {...navProps} mode="email-verify" onAuth={onAuth}/>
+      case "email-verify":
+        return (
+          <AuthScreen {...navProps} mode="email-verify" onAuth={() => {}} />
+        )
 
-      case 'onboarding':
-        return <OnboardingScreen {...navProps} onComplete={onOnboardingComplete}/>
+      case "onboarding":
+        return (
+          <OnboardingScreen {...navProps} onComplete={onOnboardingComplete} />
+        )
 
-      case 'home':
-        return <HomeScreen {...navProps} state={state} setState={setState}/>
+      case "home":
+        return <HomeScreen {...navProps} state={data} setState={setData} />
 
-      case 'food':
-        return <FoodScreen {...navProps} state={state} setState={setState}/>
+      case "food":
+        return (
+          <FoodScreen
+            {...navProps}
+            state={data}
+            setState={setData}
+            userId={userId}
+            refetch={refetch}
+          />
+        )
 
-      case 'workout':
-        return <WorkoutScreen {...navProps} state={state} setState={setState}/>
+      case "workout":
+        return (
+          <WorkoutScreen
+            {...navProps}
+            state={data}
+            setState={setData}
+            userId={userId}
+            refetch={refetch}
+          />
+        )
 
-      case 'water':
-        return <WaterScreen {...navProps} state={state} setState={setState}/>
+      case "water":
+        return (
+          <WaterScreen
+            {...navProps}
+            state={data}
+            setState={setData}
+            userId={userId}
+            refetch={refetch}
+          />
+        )
 
-      case 'weight':
-        return <WeightScreen {...navProps} state={state} setState={setState}/>
+      case "weight":
+        return (
+          <WeightScreen
+            {...navProps}
+            state={data}
+            setState={setData}
+            userId={userId}
+            refetch={refetch}
+          />
+        )
 
-      case 'garden':
-      case 'garden-history':
-        return <GardenScreen {...navProps} state={state}/>
+      case "garden":
+      case "garden-history":
+        return <GardenScreen {...navProps} state={data} userId={userId} />
 
-      case 'ai-coach':
-        return <AICoachScreen {...navProps} state={state} setState={setState}/>
+      case "ai-coach":
+        return <AICoachScreen {...navProps} state={data} setState={setData} />
 
-      case 'ai-plan':
-        return <AIPlanScreen {...navProps} state={state} setState={setState}/>
+      case "ai-plan":
+        return (
+          <AIPlanScreen
+            {...navProps}
+            state={data}
+            setState={setData}
+            userId={userId}
+          />
+        )
 
-      case 'premium':
-        return <PremiumScreen {...navProps} onUpgrade={() => setState({ isPremium: true })}/>
+      case "premium":
+        return (
+          <PremiumScreen
+            {...navProps}
+            onUpgrade={() => refetch()}
+            userId={userId}
+          />
+        )
 
-      case 'profile':
-        return <ProfileScreen {...navProps} state={state} setState={setState} onLogout={onLogout}/>
+      case "profile":
+        return (
+          <ProfileScreen
+            {...navProps}
+            state={data}
+            setState={setData}
+            onLogout={onLogout}
+            authId={session?.user.id ?? ""}
+          />
+        )
 
-      // Readable signed-out too: the landing footer links here before anyone
-      // has an account, so these must not sit behind the auth guard.
-      case 'privacy':
-      case 'terms':
-      case 'about':
-        return <LegalScreen {...navProps} doc={screen} backTo={isLoggedIn ? 'profile' : 'landing'}/>
+      case "privacy":
+      case "terms":
+      case "about":
+        return (
+          <LegalScreen
+            {...navProps}
+            doc={screen}
+            backTo={isLoggedIn ? "profile" : "landing"}
+          />
+        )
 
       default:
-        return <LandingScreen {...navProps}/>
+        return <LandingScreen {...navProps} />
     }
   }
 
   return (
     <div
-      dir={lang === 'ur' ? 'rtl' : 'ltr'}
+      dir={lang === "ur" ? "rtl" : "ltr"}
       lang={lang}
       className="app-noise"
       style={{
-        minHeight: '100vh',
+        minHeight: "100vh",
         maxWidth: 430,
-        margin: '0 auto',
+        margin: "0 auto",
         background:
-          'radial-gradient(circle at 12% 10%, rgba(217,109,32,0.10), transparent 28%), radial-gradient(circle at 84% 18%, rgba(59,143,159,0.10), transparent 26%), radial-gradient(circle at 72% 88%, rgba(227,171,37,0.12), transparent 28%), linear-gradient(180deg, #fbf6ea 0%, #f7edd9 100%)',
-        position: 'relative',
-        overflow: 'hidden',
-        boxShadow: '0 0 60px rgba(58,36,18,0.07)',
-        borderLeft: '1px solid rgba(232,216,188,0.55)',
-        borderRight: '1px solid rgba(232,216,188,0.55)',
-        fontFamily: lang === 'ur' ? "'Noto Nastaliq Urdu', 'Nunito', serif" : "'Nunito', sans-serif",
+          "radial-gradient(circle at 12% 10%, rgba(217,109,32,0.10), transparent 28%), radial-gradient(circle at 84% 18%, rgba(59,143,159,0.10), transparent 26%), radial-gradient(circle at 72% 88%, rgba(227,171,37,0.12), transparent 28%), linear-gradient(180deg, #fbf6ea 0%, #f7edd9 100%)",
+        position: "relative",
+        overflow: "hidden",
+        boxShadow: "0 0 60px rgba(58,36,18,0.07)",
+        borderLeft: "1px solid rgba(232,216,188,0.55)",
+        borderRight: "1px solid rgba(232,216,188,0.55)",
+        fontFamily:
+          lang === "ur"
+            ? "'Noto Nastaliq Urdu', 'Nunito', serif"
+            : "'Nunito', sans-serif",
       }}
     >
       <div className="pointer-events-none absolute inset-0">
@@ -228,11 +356,21 @@ export default function App() {
         <div className="absolute -bottom-28 left-10 h-72 w-72 rounded-full bg-[#e3ab25]/12 blur-3xl" />
       </div>
       <div className="relative z-10">
-      {renderScreen()}
-      {showNav && (
-        <BottomNav {...navProps}/>
-      )}
+        {renderScreen()}
+        {showNav && <BottomNav {...navProps} />}
       </div>
     </div>
+  )
+}
+
+export default function App() {
+  return (
+    <ErrorBoundary>
+      <ToastProvider>
+        <AuthProvider>
+          <AppShell />
+        </AuthProvider>
+      </ToastProvider>
+    </ErrorBoundary>
   )
 }

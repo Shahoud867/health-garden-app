@@ -1,8 +1,8 @@
-import type { PlantState } from '../types'
-import type { GardenTheme } from '../data/gardenThemes'
-import PlantImage from './PlantImage'
+import type { PlantState } from "../types"
+import type { GardenTheme } from "../data/gardenThemes"
+import PlantImage from "./PlantImage"
 
-type PlantType = PlantState['type']
+type PlantType = PlantState["type"]
 
 /**
  * The permanent garden: a theme's field art with fully-grown plants placed on
@@ -22,11 +22,11 @@ export default function GardenBoard({
   theme,
   plants,
   rounded = true,
+  /** Fully-grown plants, in planting order. Fills back-to-front, no gaps. */
+  /** Off for the full-bleed hero, on for the smaller cards in My Gardens. */
 }: {
   theme: GardenTheme
-  /** Fully-grown plants, in planting order. Fills back-to-front, no gaps. */
   plants: PlantType[]
-  /** Off for the full-bleed hero, on for the smaller cards in My Gardens. */
   rounded?: boolean
 }) {
   const ys = theme.slots.map((s) => s.y)
@@ -35,7 +35,9 @@ export default function GardenBoard({
 
   return (
     <div
-      className={`relative w-full overflow-hidden ${rounded ? 'rounded-[26px] border border-[#e6d5ba]' : ''}`}
+      className={`relative w-full overflow-hidden ${
+        rounded ? "rounded-[26px] border border-[#e6d5ba]" : ""
+      }`}
       style={{ aspectRatio: `${theme.fieldWidth} / ${theme.fieldHeight}` }}
     >
       <img
@@ -62,7 +64,7 @@ export default function GardenBoard({
               height: `${heightPct}%`,
               // Sink the sprite slightly into the soil so it reads as planted
               // rather than resting on top of it.
-              transform: 'translate(-50%, -92%)',
+              transform: "translate(-50%, -92%)",
               zIndex: Math.round(pos.y * 10),
             }}
           >
@@ -72,7 +74,7 @@ export default function GardenBoard({
               aria-hidden="true"
               draggable={false}
               className="h-full w-auto"
-              style={{ filter: 'drop-shadow(0 3px 4px rgba(44,36,24,0.25))' }}
+              style={{ filter: "drop-shadow(0 3px 4px rgba(44,36,24,0.25))" }}
             />
           </div>
         )

@@ -3,18 +3,18 @@
 // Source data: tools/slots.json (captured via tools/marker-picker.html)
 
 export interface GardenTheme {
-  slug: string;
-  name: string;
-  fieldImage: string;
-  fieldWidth: number;
-  fieldHeight: number;
+  slug: string
+  name: string
+  fieldImage: string
+  fieldWidth: number
+  fieldHeight: number
   /**
    * Plant render size as a multiple of the default, for themes whose plot is
    * physically smaller in frame and would otherwise look overcrowded.
    */
-  plantScale?: number;
+  plantScale?: number
   /** 25 slot centers (5x5 isometric grid), as % of field image width/height. */
-  slots: { x: number; y: number }[];
+  slots: { x: number; y: number }[]
 }
 
 /**
@@ -23,9 +23,9 @@ export interface GardenTheme {
  */
 export const GARDEN_THEMES: GardenTheme[] = [
   {
-    slug: 'candyland',
-    name: 'Candyland',
-    fieldImage: '/themes/candyland/field.png',
+    slug: "candyland",
+    name: "Candyland",
+    fieldImage: "/themes/candyland/field.png",
     fieldWidth: 1122,
     fieldHeight: 1402,
     slots: [
@@ -57,9 +57,9 @@ export const GARDEN_THEMES: GardenTheme[] = [
     ],
   },
   {
-    slug: 'beach',
-    name: 'Beach',
-    fieldImage: '/themes/beach/field.png',
+    slug: "beach",
+    name: "Beach",
+    fieldImage: "/themes/beach/field.png",
     fieldWidth: 1122,
     fieldHeight: 1402,
     slots: [
@@ -91,9 +91,9 @@ export const GARDEN_THEMES: GardenTheme[] = [
     ],
   },
   {
-    slug: 'dessert',
-    name: 'Dessert',
-    fieldImage: '/themes/dessert/field.png',
+    slug: "dessert",
+    name: "Dessert",
+    fieldImage: "/themes/dessert/field.png",
     fieldWidth: 1122,
     fieldHeight: 1402,
     slots: [
@@ -125,9 +125,9 @@ export const GARDEN_THEMES: GardenTheme[] = [
     ],
   },
   {
-    slug: 'main-garden',
-    name: 'Main Garden',
-    fieldImage: '/themes/main-garden/field.png',
+    slug: "main-garden",
+    name: "Main Garden",
+    fieldImage: "/themes/main-garden/field.png",
     fieldWidth: 1122,
     fieldHeight: 1402,
     slots: [
@@ -159,9 +159,9 @@ export const GARDEN_THEMES: GardenTheme[] = [
     ],
   },
   {
-    slug: 'autumn',
-    name: 'Autumn',
-    fieldImage: '/themes/autumn/field.png',
+    slug: "autumn",
+    name: "Autumn",
+    fieldImage: "/themes/autumn/field.png",
     fieldWidth: 1123,
     fieldHeight: 1401,
     slots: [
@@ -193,9 +193,9 @@ export const GARDEN_THEMES: GardenTheme[] = [
     ],
   },
   {
-    slug: 'winter',
-    name: 'Winter',
-    fieldImage: '/themes/winter/field.png',
+    slug: "winter",
+    name: "Winter",
+    fieldImage: "/themes/winter/field.png",
     fieldWidth: 1122,
     fieldHeight: 1402,
     slots: [
@@ -227,9 +227,9 @@ export const GARDEN_THEMES: GardenTheme[] = [
     ],
   },
   {
-    slug: 'whimsical',
-    name: 'Whimsical',
-    fieldImage: '/themes/whimsical/field.png',
+    slug: "whimsical",
+    name: "Whimsical",
+    fieldImage: "/themes/whimsical/field.png",
     fieldWidth: 1123,
     fieldHeight: 1401,
     slots: [
@@ -261,9 +261,9 @@ export const GARDEN_THEMES: GardenTheme[] = [
     ],
   },
   {
-    slug: 'cherry-blossom',
-    name: 'Cherry Blossom',
-    fieldImage: '/themes/cherry-blossom/field.png',
+    slug: "cherry-blossom",
+    name: "Cherry Blossom",
+    fieldImage: "/themes/cherry-blossom/field.png",
     fieldWidth: 1123,
     fieldHeight: 1400,
     slots: [
@@ -295,9 +295,9 @@ export const GARDEN_THEMES: GardenTheme[] = [
     ],
   },
   {
-    slug: 'savanna',
-    name: 'Savanna',
-    fieldImage: '/themes/savanna/field.png',
+    slug: "savanna",
+    name: "Savanna",
+    fieldImage: "/themes/savanna/field.png",
     fieldWidth: 1122,
     fieldHeight: 1402,
     slots: [
@@ -329,9 +329,9 @@ export const GARDEN_THEMES: GardenTheme[] = [
     ],
   },
   {
-    slug: 'back-garden',
-    name: 'Back Garden',
-    fieldImage: '/themes/back-garden/field.png',
+    slug: "back-garden",
+    name: "Back Garden",
+    fieldImage: "/themes/back-garden/field.png",
     fieldWidth: 1122,
     fieldHeight: 1402,
     slots: [
@@ -363,9 +363,9 @@ export const GARDEN_THEMES: GardenTheme[] = [
     ],
   },
   {
-    slug: 'fruit-backyard',
-    name: 'Fruit Backyard',
-    fieldImage: '/themes/fruit-backyard/field.png',
+    slug: "fruit-backyard",
+    name: "Fruit Backyard",
+    fieldImage: "/themes/fruit-backyard/field.png",
     fieldWidth: 1122,
     fieldHeight: 1402,
     slots: [
@@ -397,9 +397,9 @@ export const GARDEN_THEMES: GardenTheme[] = [
     ],
   },
   {
-    slug: 'garden',
-    name: 'Garden',
-    fieldImage: '/themes/garden/field.png',
+    slug: "garden",
+    name: "Garden",
+    fieldImage: "/themes/garden/field.png",
     fieldWidth: 1122,
     fieldHeight: 1402,
     slots: [
@@ -431,9 +431,9 @@ export const GARDEN_THEMES: GardenTheme[] = [
     ],
   },
   {
-    slug: 'greenhouse',
-    name: 'Greenhouse',
-    fieldImage: '/themes/greenhouse/field.png',
+    slug: "greenhouse",
+    name: "Greenhouse",
+    fieldImage: "/themes/greenhouse/field.png",
     fieldWidth: 1122,
     fieldHeight: 1402,
     plantScale: 0.78,
@@ -466,9 +466,9 @@ export const GARDEN_THEMES: GardenTheme[] = [
     ],
   },
   {
-    slug: 'jurassic',
-    name: 'Jurassic',
-    fieldImage: '/themes/jurassic/field.png',
+    slug: "jurassic",
+    name: "Jurassic",
+    fieldImage: "/themes/jurassic/field.png",
     fieldWidth: 1122,
     fieldHeight: 1402,
     slots: [
@@ -500,9 +500,9 @@ export const GARDEN_THEMES: GardenTheme[] = [
     ],
   },
   {
-    slug: 'moonlit',
-    name: 'Moonlit',
-    fieldImage: '/themes/moonlit/field.png',
+    slug: "moonlit",
+    name: "Moonlit",
+    fieldImage: "/themes/moonlit/field.png",
     fieldWidth: 1122,
     fieldHeight: 1402,
     slots: [
@@ -534,9 +534,9 @@ export const GARDEN_THEMES: GardenTheme[] = [
     ],
   },
   {
-    slug: 'wonderland',
-    name: 'Wonderland',
-    fieldImage: '/themes/wonderland/field.png',
+    slug: "wonderland",
+    name: "Wonderland",
+    fieldImage: "/themes/wonderland/field.png",
     fieldWidth: 1122,
     fieldHeight: 1402,
     slots: [
@@ -567,11 +567,11 @@ export const GARDEN_THEMES: GardenTheme[] = [
       { x: 49.33, y: 58.71 },
     ],
   },
-];
+]
 
 /** The theme the Garden screen shows. Swap the slug to change it. */
-export const DEFAULT_THEME_SLUG = 'main-garden';
+export const DEFAULT_THEME_SLUG = "main-garden"
 
 export function themeBySlug(slug: string): GardenTheme {
-  return GARDEN_THEMES.find((t) => t.slug === slug) ?? GARDEN_THEMES[0];
+  return GARDEN_THEMES.find((t) => t.slug === slug) ?? GARDEN_THEMES[0]
 }
