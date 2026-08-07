@@ -53,3 +53,6 @@ npm-debug.log*
 *.tmp
 *.temp
 *~
+
+# Vendored Claude Code skills — installed tooling, not project source.
+.claude/skills/

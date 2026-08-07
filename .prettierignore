@@ -9,6 +9,10 @@ build/
 # fighting over the same files.
 supabase/functions/
 
+# The web client formats itself with oxfmt (`npm run format --prefix frontend`),
+# same one-formatter-per-directory rule as above.
+frontend/
+
 # Generated artifacts
 supabase/functions/_shared/database.types.ts
 package-lock.json

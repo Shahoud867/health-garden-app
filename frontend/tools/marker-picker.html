@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Garden theme marker picker</title>
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    font-family: system-ui, -apple-system, sans-serif;
+    margin: 0;
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    height: 100vh;
+    background: #1b1b1b;
+    color: #eee;
+  }
+  #canvasPane {
+    overflow: auto;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 16px;
+  }
+  #canvasWrap { position: relative; }
+  canvas { display: block; cursor: crosshair; max-width: none; }
+  #sidebar {
+    border-left: 1px solid #444;
+    padding: 16px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  h1 { font-size: 15px; margin: 0 0 4px; }
+  p.hint { font-size: 12px; color: #aaa; margin: 0 0 8px; line-height: 1.4; }
+  label { font-size: 12px; color: #ccc; display: block; margin-bottom: 4px; }
+  input[type="text"] {
+    width: 100%; box-sizing: border-box; padding: 6px 8px; border-radius: 6px;
+    border: 1px solid #555; background: #2a2a2a; color: #eee; font-size: 13px;
+  }
+  input[type="file"] { font-size: 12px; color: #ccc; }
+  button {
+    padding: 7px 10px; border-radius: 6px; border: 1px solid #555;
+    background: #333; color: #eee; font-size: 12px; cursor: pointer;
+  }
+  button:hover { background: #3d3d3d; }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .row { display: flex; gap: 8px; }
+  .row > button { flex: 1; }
+  #progress { font-size: 13px; font-weight: 600; }
+  #progress.done { color: #7ec97e; }
+  ol#pointList {
+    list-style: none; margin: 0; padding: 0; font-size: 11px;
+    font-family: ui-monospace, monospace; color: #bbb;
+    max-height: 160px; overflow-y: auto; border: 1px solid #333; border-radius: 6px;
+  }
+  ol#pointList li { padding: 3px 8px; border-bottom: 1px solid #2a2a2a; }
+  ol#pointList li:last-child { border-bottom: none; }
+  table#themeTable { width: 100%; border-collapse: collapse; font-size: 12px; }
+  table#themeTable td, table#themeTable th { padding: 4px 6px; border-bottom: 1px solid #333; text-align: left; }
+  #jsonOut {
+    width: 100%; height: 120px; box-sizing: border-box; font-family: ui-monospace, monospace;
+    font-size: 10px; background: #111; color: #8f8; border: 1px solid #333; border-radius: 6px; padding: 6px;
+  }
+  hr { border: none; border-top: 1px solid #333; margin: 4px 0; }
+</style>
+</head>
+<body>
+  <div id="canvasPane">
+    <div id="canvasWrap">
+      <canvas id="stage" width="600" height="400"></canvas>
+    </div>
+  </div>
+
+  <div id="sidebar">
+    <div>
+      <h1>Garden theme marker picker</h1>
+      <p class="hint">
+        Load a theme's <code>grid.png</code>. Click each marker <b>in reading order
+        (left→right, top→bottom)</b> — 25 total. Right-click or "Undo last" to fix a
+        mistake. When 25 are placed, name the theme and hit "Save theme", then load
+        the next file. When all themes are done, copy/download the combined JSON.
+      </p>
+    </div>
+
+    <div>
+      <label>Image file (that theme's grid.png)</label>
+      <input type="file" id="fileInput" accept="image/*" />
+    </div>
+
+    <div>
+      <label>Theme name</label>
+      <input type="text" id="themeName" placeholder="e.g. garden" />
+    </div>
+
+    <div id="progress">0 / 25 points</div>
+
+    <div class="row">
+      <button id="undoBtn">Undo last</button>
+      <button id="clearBtn">Clear points</button>
+    </div>
+
+    <ol id="pointList"></ol>
+
+    <button id="saveThemeBtn" disabled>Save theme (needs 25 points + name)</button>
+
+    <hr />
+
+    <div>
+      <label>Captured themes this session</label>
+      <table id="themeTable">
+        <thead><tr><th>Theme</th><th>Pts</th><th></th></tr></thead>
+        <tbody id="themeTableBody"></tbody>
+      </table>
+    </div>
+
+    <div class="row">
+      <button id="copyJsonBtn">Copy all JSON</button>
+      <button id="downloadJsonBtn">Download all JSON</button>
+    </div>
+
+    <textarea id="jsonOut" readonly placeholder="Combined JSON for all captured themes appears here..."></textarea>
+  </div>
+
+<script>
+  const canvas = document.getElementById('stage');
+  const ctx = canvas.getContext('2d');
+  const fileInput = document.getElementById('fileInput');
+  const themeNameInput = document.getElementById('themeName');
+  const progressEl = document.getElementById('progress');
+  const pointListEl = document.getElementById('pointList');
+  const saveThemeBtn = document.getElementById('saveThemeBtn');
+  const undoBtn = document.getElementById('undoBtn');
+  const clearBtn = document.getElementById('clearBtn');
+  const themeTableBody = document.getElementById('themeTableBody');
+  const jsonOut = document.getElementById('jsonOut');
+  const copyJsonBtn = document.getElementById('copyJsonBtn');
+  const downloadJsonBtn = document.getElementById('downloadJsonBtn');
+
+  const REQUIRED_POINTS = 25;
+  let img = null;
+  let imgW = 0, imgH = 0;
+  let points = []; // {x, y} in original image pixel space
+  const themes = {}; // name -> {width, height, slots:[{x,y} in 0-100 %]}
+
+  function loadThemesFromStorage() {
+    try {
+      const raw = localStorage.getItem('gardenThemeMarkers');
+      if (raw) Object.assign(themes, JSON.parse(raw));
+    } catch (e) { /* ignore */ }
+  }
+  function persistThemes() {
+    localStorage.setItem('gardenThemeMarkers', JSON.stringify(themes));
+  }
+
+  fileInput.addEventListener('change', () => {
+    const file = fileInput.files[0];
+    if (!file) return;
+    const guessedName = file.name.replace(/\.(png|jpg|jpeg)$/i, '').replace(/\s+(grid|bald|markers)$/i, '');
+    themeNameInput.value = guessedName;
+    const url = URL.createObjectURL(file);
+    const image = new Image();
+    image.onload = () => {
+      img = image;
+      imgW = image.naturalWidth;
+      imgH = image.naturalHeight;
+      // Cap the display size so huge exports still fit on screen; we keep
+      // real image-pixel coordinates internally regardless of zoom.
+      const maxDisplayW = Math.min(1100, window.innerWidth - 360);
+      const scale = Math.min(1, maxDisplayW / imgW);
+      canvas.width = Math.round(imgW * scale);
+      canvas.height = Math.round(imgH * scale);
+      canvas.dataset.scale = scale;
+      points = [];
+      redraw();
+      updateProgress();
+      URL.revokeObjectURL(url);
+    };
+    image.src = url;
+  });
+
+  canvas.addEventListener('click', (e) => {
+    if (!img || points.length >= REQUIRED_POINTS) return;
+    const rect = canvas.getBoundingClientRect();
+    const scale = parseFloat(canvas.dataset.scale || '1');
+    const dispX = e.clientX - rect.left;
+    const dispY = e.clientY - rect.top;
+    const x = dispX / scale;
+    const y = dispY / scale;
+    points.push({ x, y });
+    redraw();
+    updateProgress();
+  });
+
+  canvas.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    points.pop();
+    redraw();
+    updateProgress();
+  });
+
+  undoBtn.addEventListener('click', () => { points.pop(); redraw(); updateProgress(); });
+  clearBtn.addEventListener('click', () => { points = []; redraw(); updateProgress(); });
+
+  function redraw() {
+    if (!img) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    const scale = parseFloat(canvas.dataset.scale || '1');
+    points.forEach((p, i) => {
+      const dx = p.x * scale, dy = p.y * scale;
+      ctx.beginPath();
+      ctx.arc(dx, dy, 9, 0, Math.PI * 2);
+      ctx.strokeStyle = '#ff3b3b';
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+      ctx.fillStyle = '#ff3b3b';
+      ctx.font = 'bold 12px system-ui';
+      ctx.fillText(String(i + 1), dx + 11, dy - 8);
+    });
+  }
+
+  function updateProgress() {
+    progressEl.textContent = `${points.length} / ${REQUIRED_POINTS} points`;
+    progressEl.classList.toggle('done', points.length === REQUIRED_POINTS);
+    pointListEl.innerHTML = points
+      .map((p, i) => {
+        const xPct = ((p.x / imgW) * 100).toFixed(2);
+        const yPct = ((p.y / imgH) * 100).toFixed(2);
+        return `<li>#${i + 1}  x=${xPct}%  y=${yPct}%</li>`;
+      })
+      .join('');
+    saveThemeBtn.disabled = !(points.length === REQUIRED_POINTS && themeNameInput.value.trim());
+  }
+  themeNameInput.addEventListener('input', updateProgress);
+
+  saveThemeBtn.addEventListener('click', () => {
+    const name = themeNameInput.value.trim();
+    if (!name || points.length !== REQUIRED_POINTS) return;
+    const slots = points.map((p) => ({
+      x: Math.round((p.x / imgW) * 10000) / 100,
+      y: Math.round((p.y / imgH) * 10000) / 100,
+    }));
+    themes[name] = { width: imgW, height: imgH, slots };
+    persistThemes();
+    renderThemeTable();
+    renderJson();
+    // Reset for the next theme.
+    points = [];
+    img = null;
+    fileInput.value = '';
+    themeNameInput.value = '';
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    updateProgress();
+  });
+
+  function renderThemeTable() {
+    themeTableBody.innerHTML = Object.entries(themes)
+      .map(
+        ([name, data]) =>
+          `<tr><td>${name}</td><td>${data.slots.length}</td><td><button data-remove="${name}">✕</button></td></tr>`,
+      )
+      .join('');
+    themeTableBody.querySelectorAll('button[data-remove]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        delete themes[btn.dataset.remove];
+        persistThemes();
+        renderThemeTable();
+        renderJson();
+      });
+    });
+  }
+
+  function renderJson() {
+    jsonOut.value = JSON.stringify(themes, null, 2);
+  }
+
+  copyJsonBtn.addEventListener('click', async () => {
+    await navigator.clipboard.writeText(JSON.stringify(themes, null, 2));
+    copyJsonBtn.textContent = 'Copied!';
+    setTimeout(() => (copyJsonBtn.textContent = 'Copy all JSON'), 1200);
+  });
+
+  downloadJsonBtn.addEventListener('click', () => {
+    const blob = new Blob([JSON.stringify(themes, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'theme-slots.json';
+    a.click();
+  });
+
+  loadThemesFromStorage();
+  renderThemeTable();
+  renderJson();
+  updateProgress();
+</script>
+</body>
+</html>
