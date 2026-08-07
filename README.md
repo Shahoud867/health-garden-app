@@ -39,16 +39,16 @@ for premium plans/chat.
 
 ## Status
 
-| Layer                        | Scope                                                                                              | State                                          |
-| ---------------------------- | -------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
-| **Database**                 | Schema (22 tables), RLS, garden engine, seed data                                                  | ✅ Complete                                    |
-| **Edge Functions**           | Auth-adjacent (export/delete), AI (chat/plan), interim payments, background jobs                   | ✅ Complete                                    |
-| **Background processing**    | `pg_cron`/`pg_net`: engagement nudges, quota watchdog, payment reconciliation                      | ✅ Complete                                    |
-| **Web client (`frontend/`)** | Vite + React 19 + Tailwind v4, all 17 screens wired to real Supabase Auth/PostgREST/Edge Functions | ✅ Complete, unverified against a live project |
-| **Real merchant payments**   | `payments-create-checkout`/`payments-webhook` (ADR-008's real-API path)                            | ⏳ Gated — no merchant account yet             |
-| **Production accounts**      | Sentry, PostHog, UptimeRobot, live Supabase project, Google OAuth, Cloudflare Turnstile            | ⏳ Not provisioned                             |
-| **Automated frontend tests** | Unit/E2E suite for the web client                                                                  | ❌ Does not exist yet                          |
-| React Native mobile port     | Only if the retention gate (Blueprint §13.6) clears                                                | Gated                                          |
+| Layer                        | Scope                                                                                              | State                                                                            |
+| ---------------------------- | -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| **Database**                 | Schema (22 tables), RLS, garden engine, seed data                                                  | ✅ Complete                                                                      |
+| **Edge Functions**           | Auth-adjacent (export/delete), AI (chat/plan), interim payments, background jobs                   | ✅ Complete                                                                      |
+| **Background processing**    | `pg_cron`/`pg_net`: engagement nudges, quota watchdog, payment reconciliation                      | ✅ Complete                                                                      |
+| **Web client (`frontend/`)** | Vite + React 19 + Tailwind v4, all 17 screens wired to real Supabase Auth/PostgREST/Edge Functions | ✅ Complete, unverified against a live project                                   |
+| **Real merchant payments**   | `payments-create-checkout`/`payments-webhook` (ADR-008's real-API path)                            | ⏳ Gated — no merchant account yet                                               |
+| **Production accounts**      | Sentry, PostHog, UptimeRobot, live Supabase project, Google OAuth, Cloudflare Turnstile            | ⏳ Not provisioned                                                               |
+| **Automated frontend tests** | Vitest unit suite (41 tests, mocked) + Playwright E2E suite (9 tests, real local Supabase stack)   | 🔶 Unit suite passing; E2E suite unexecuted here — no Docker in this environment |
+| React Native mobile port     | Only if the retention gate (Blueprint §13.6) clears                                                | Gated                                                                            |
 
 The backend was built first, phase by phase, against the blueprint (§13.2) — see
 [CONTRIBUTING.md](CONTRIBUTING.md) for that history and the ADR log under `docs/adr/`. The
@@ -428,13 +428,17 @@ Vite only exposes `VITE_`-prefixed variables to client code, by design — never
 
 ### Frontend (`frontend/`)
 
-| Command            | Purpose                                                                                          |
-| ------------------ | ------------------------------------------------------------------------------------------------ |
-| `npm run dev`      | Start the Vite dev server (`http://localhost:8443`)                                              |
-| `npm run build`    | Production build to `frontend/dist/`                                                             |
-| `npm run preview`  | Serve the production build locally                                                               |
-| `npx tsc --noEmit` | Typecheck (no dedicated `npm run typecheck` script exists yet — add one if this becomes a habit) |
-| `npm run format`   | `oxfmt` — **see the known-issue note below before running this**                                 |
+| Command               | Purpose                                                                               |
+| --------------------- | ------------------------------------------------------------------------------------- |
+| `npm run dev`         | Start the Vite dev server (`http://localhost:8443`)                                   |
+| `npm run build`       | Production build to `frontend/dist/`                                                  |
+| `npm run preview`     | Serve the production build locally                                                    |
+| `npm run typecheck`   | `tsc --noEmit`                                                                        |
+| `npm test`            | Vitest unit suite (`tests/unit/`) — mocked, no live services needed                   |
+| `npm run test:watch`  | Vitest in watch mode                                                                  |
+| `npm run test:e2e`    | Playwright E2E suite (`tests/e2e/`) — needs a running local Supabase stack, see below |
+| `npm run test:e2e:ui` | Same, with Playwright's interactive UI runner                                         |
+| `npm run format`      | `oxfmt` — **see the known-issue note below before running this**                      |
 
 > **Known issue: `oxfmt` (`^0.2.0`, a young/experimental formatter) strips semicolons from
 > inline TypeScript object-type literals** (`{ a: string; b: string }` → `{ a: string b: string }`,
@@ -486,9 +490,19 @@ frontend/                  Vite + React 19 + Tailwind v4 web client (own toolcha
                                plus the original design system (Primitives, PlantSVG, GardenBoard, ...)
     screens/                   17 screens — unchanged component boundaries from the original design,
                                rewired internally to call lib/api/* instead of local mock state
+  tests/
+    unit/                      Vitest + Testing Library — mocked Supabase, no live services
+      helpers/mockSupabase.ts    Chainable stand-in for supabase-js's PostgREST query builder
+      api/                       One spec file per lib/api/* module
+    e2e/                       Playwright — real browser against a real local Supabase stack
+      helpers.ts                 Shared signUpNewUser/completeOnboarding fixtures
+  vitest.config.ts           Standalone from vite.config.ts on purpose — see its own doc comment
+  playwright.config.ts
 docs/adr/                 Architecture Decision Records
 docs/operations.md        Phase 8 setup: UptimeRobot, Sentry, PostHog, first real deploy
-.github/workflows/        CI pipeline — backend (quality/database/secrets) + frontend (typecheck/build)
+.github/workflows/        CI pipeline — backend (quality/database/secrets) + frontend
+                           (typecheck/unit-tests/build, and a separate E2E job against a real
+                           local Supabase stack)
 ```
 
 ### Writing a new Edge Function
@@ -566,22 +580,48 @@ import that. This keeps every network call in one place, typed against
 
 ### Frontend
 
-**No automated test suite exists.** This is stated plainly rather than worked around with a thin
-placeholder test — a single trivial test file would satisfy "tests exist" without providing real
-coverage, which is worse than being honest about the gap. What was verified instead, this round:
+Two layers, `frontend/tests/`:
 
-- `npx tsc --noEmit` — clean, strict TypeScript across the whole app.
-- `npm run build` — production build succeeds.
-- Manual smoke test against the running dev server (landing page, navigation, form rendering,
-  console-error-free boot) — not exhaustive click-through of every flow.
-- Careful line-by-line review of every screen's data wiring against the actual backend schema
-  and RLS policies (not assumed — checked against the migration files directly).
+- **Unit tests** (`npm test`, `tests/unit/`) — Vitest + React Testing Library. The Supabase client
+  is fully mocked (`tests/unit/helpers/mockSupabase.ts`, a chainable stand-in for its PostgREST
+  query builder) so these run in milliseconds with no live services. Cover `lib/errors.ts`,
+  `lib/date.ts`, `lib/gardenMapping.ts`, and the request/response shape of every `lib/api/*`
+  function — including pinning the exact snake_case-vs-camelCase request body each Edge Function
+  actually expects (`ai-plan-generate` and `payments-submit-intent` use different conventions from
+  each other; getting either wrong by copying the other is an easy, silent mistake). **Already
+  caught one real production bug on its first run**: `normalizeError`'s Postgrest-error duck-type
+  check was broad enough to also match plain `Error`/`TypeError` instances (since
+  `@supabase/postgrest-js`'s `PostgrestError` genuinely extends `Error`), which meant a real
+  network failure's "Failed to fetch" would never have reached the network-error branch and its
+  friendlier message — silently showing the raw browser error to a user offline instead. Fixed in
+  `lib/errors.ts`.
+- **E2E tests** (`npm run test:e2e`, `tests/e2e/`) — Playwright, driving the real built app against
+  a **real local Supabase stack** (the same `supabase start` pattern the backend's own database
+  test suite uses, for the same reason: this is where a frontend/backend contract mismatch
+  actually gets caught, not in a mock). Covers signup → onboarding → home, wrong-password login,
+  forgot-password, and a full log-a-glass-of-water round trip verified to survive a page reload
+  (proving it hit `water_logs` for real, not just local React state). Requires
+  `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY` pointed at a running local stack —
+  `npm run db:start` at the repo root, then `npx supabase status -o env` for the values.
 
-**Adding a real suite is the single highest-leverage next step** for this codebase — see
-[Remaining work](#remaining-work--assumptions). Recommended: [Playwright](https://playwright.dev)
-for E2E (it can drive the real dev server against a local Supabase stack, exercising real RLS
-policies rather than mocks) plus [Vitest](https://vitest.dev) + React Testing Library for
-component-level tests of the `lib/api/*` layer and hooks in isolation.
+**Neither suite has been executed in this environment** — no Docker/local Supabase stack is
+available here, so `npm run test:e2e` has never actually run end-to-end; correctness was verified
+as far as possible without one: `npx playwright test --list` confirms every spec file parses and
+every test is discovered (9 tests, 2 files), and every selector was checked against the exact
+JSX each screen renders (label text, ARIA labels, button text) rather than guessed. Unit tests
+**did** run, repeatedly, in this environment (no live services needed) — 41 passing, including the
+bug catch above. CI (`.github/workflows/ci.yml`'s `frontend-e2e` job) will be the first real
+execution of the E2E suite; expect to spend a debugging pass on real selector/timing issues the
+first time it runs, the normal cost of writing E2E tests against code you can't click through
+yourself first.
+
+Also fixed as part of writing these tests: **several form `<label>` elements across
+AuthScreen/OnboardingScreen/ProfileScreen/PremiumScreen had no `htmlFor`/`id` association** —
+inherited from the original design, not introduced here, but a real accessibility gap (a screen
+reader wouldn't announce the label when the input receives focus) as well as what made
+`getByLabel()` selectors initially not work in the E2E tests. Fixed by adding matching
+`id`/`htmlFor` pairs throughout — a case where writing the tests surfaced a real product bug
+independent of testing itself.
 
 ---
 
@@ -655,7 +695,9 @@ own no-placeholders convention (see [CONTRIBUTING.md](CONTRIBUTING.md)).
   something this round could reconstruct). The app runs and every screen functions correctly;
   plant/theme artwork will be broken until someone with the source images re-uploads them via
   `git lfs push`.
-- **No automated frontend test suite** — see [Testing](#testing) above.
+- **The E2E test suite has never actually executed** — written and CI-wired, but no Docker/local
+  Supabase stack was available in this environment to run it against. Its first real run will be
+  in CI; see [Testing](#testing) above for exactly what that means and what to expect.
 - **Google OAuth and Cloudflare Turnstile are not configured** in any real account — both code
   paths are real and correct, but will error (clearly, not silently) until those accounts exist.
   See [Deployment](#deployment).
