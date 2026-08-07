@@ -55,6 +55,7 @@ function AppShell() {
     setState: setData,
     profile,
     loading: dataLoading,
+    hasLoadedOnce: dataHasLoadedOnce,
     loadError,
     refetch,
   } = useAppData(session)
@@ -186,7 +187,19 @@ function AppShell() {
     if (!isLoggedIn && APP_SCREENS.includes(screen)) {
       return null // the redirect effect above handles navigation
     }
-    if (isLoggedIn && dataLoading && screen !== "onboarding") {
+    // Only the true first load blocks the whole screen -- a later
+    // `refetch()` (e.g. a screen re-syncing after its own save) still flips
+    // `dataLoading`, but must never unmount the calling screen: doing so
+    // discards whatever local state that screen just set (a "✓ Saved" flip
+    // that would otherwise never become visible -- see useAppData.ts's
+    // `hasLoadedOnce` doc comment for the real, reproduced failure this
+    // traces back to).
+    if (
+      isLoggedIn &&
+      dataLoading &&
+      !dataHasLoadedOnce &&
+      screen !== "onboarding"
+    ) {
       return <FullScreenLoading />
     }
     if (

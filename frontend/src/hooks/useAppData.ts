@@ -103,10 +103,26 @@ export function useAppData(session: Session | null) {
   })
   const [profile, setProfile] = useState<UserRow | null>(null)
   const [loading, setLoading] = useState(true)
+  // Distinct from `loading` -- `loading` flips true/false on *every* call to
+  // `load` (including a screen's post-save `refetch()`), but callers (see
+  // App.tsx) only want a full-screen blocker for the very first load, not on
+  // every subsequent background refresh. Sticky: sets once, on the first
+  // load's completion (any outcome), and never resets. Without this
+  // distinction, a save that calls `refetch()` (e.g. WeightScreen's
+  // logWeight) makes App.tsx swap the whole screen out for a spinner and
+  // back, unmounting and remounting the calling screen -- discarding any
+  // local state it set right before/after the call (a "✓ Saved" flip that
+  // never became visible, traced from a real, reproducible E2E failure).
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
 
   const setState = useCallback((patch: Partial<AppState>) => {
     setStateRaw((prev) => ({ ...prev, ...patch }))
+  }, [])
+
+  const finishLoading = useCallback(() => {
+    setLoading(false)
+    setHasLoadedOnce(true)
   }, [])
 
   const load = useCallback(async () => {
@@ -117,7 +133,7 @@ export function useAppData(session: Session | null) {
         onboardingComplete: false,
       }))
       setProfile(null)
-      setLoading(false)
+      finishLoading()
       return
     }
 
@@ -140,7 +156,7 @@ export function useAppData(session: Session | null) {
           isLoggedIn: true,
           onboardingComplete: false,
         }))
-        setLoading(false)
+        finishLoading()
         return
       }
       setProfile(profileRow)
@@ -157,7 +173,7 @@ export function useAppData(session: Session | null) {
           isPremium: profileRow.is_premium,
           user: profileToUser(profileRow),
         }))
-        setLoading(false)
+        finishLoading()
         return
       }
 
@@ -249,13 +265,21 @@ export function useAppData(session: Session | null) {
     } catch (err) {
       setLoadError(normalizeError(err).message)
     } finally {
-      setLoading(false)
+      finishLoading()
     }
-  }, [session])
+  }, [session, finishLoading])
 
   useEffect(() => {
     load()
   }, [load])
 
-  return { state, setState, profile, loading, loadError, refetch: load }
+  return {
+    state,
+    setState,
+    profile,
+    loading,
+    hasLoadedOnce,
+    loadError,
+    refetch: load,
+  }
 }
