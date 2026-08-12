@@ -3,6 +3,7 @@ import type { Screen, Lang } from "./types"
 import { AuthProvider, useAuth } from "./hooks/useAuth"
 import { ToastProvider, useToast } from "./hooks/useToast"
 import { useScreenRouter } from "./hooks/useScreenRouter"
+import { identify, resetIdentity } from "./lib/analytics"
 import { ErrorBoundary } from "./components/ErrorBoundary"
 import { FullScreenLoading } from "./components/Loading"
 import { useAppData } from "./hooks/useAppData"
@@ -74,6 +75,10 @@ function AppShell() {
   const { showToast } = useToast()
   const { screen, navigate } = useScreenRouter()
   const [lang, setLangRaw] = useState<Lang>("en")
+
+  useEffect(() => {
+    if (userId) identify(userId)
+  }, [userId])
 
   useEffect(() => {
     window.scrollTo(0, 0)
@@ -177,6 +182,7 @@ function AppShell() {
       // on the profile screen -- the local session is cleared either way
       // once onAuthStateChange fires, so proceed to the landing screen.
     }
+    resetIdentity()
     navigate("landing")
   }
 

@@ -3,6 +3,7 @@ import type { NavProps, AppState } from "../types"
 import { t } from "../types"
 import { addWorkoutLog, deleteWorkoutLog } from "../lib/api/logs"
 import { useToast } from "../hooks/useToast"
+import { track } from "../lib/analytics"
 import SyncBadge from "../components/SyncBadge"
 import { Spinner } from "../components/Loading"
 import {
@@ -139,6 +140,7 @@ export default function WorkoutScreen({
         durationMin: duration,
         caloriesBurned: selected.calPerMin * duration,
       })
+      track("log_created", { type: "workout" })
       await refetch()
       setSelected(null)
       showToast(

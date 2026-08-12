@@ -1,6 +1,7 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import type { NavProps, AppState } from "../types"
 import { t } from "../types"
+import { track } from "../lib/analytics"
 import PlantSVG from "../components/PlantSVG"
 import {
   ChevronLeftIcon,
@@ -74,6 +75,15 @@ export default function OnboardingScreen({
   const stepIndex = STEPS.indexOf(step)
   const progress = (stepIndex / (STEPS.length - 1)) * 100
 
+  // The audit's own #1 pick to instrument first: nobody currently knows the
+  // real onboarding completion rate, let alone which step loses people.
+  // One event per step actually shown, not per render.
+  useEffect(() => {
+    track("onboarding_step_viewed", { step, step_index: stepIndex })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fire once per
+    // step change, not on every stepIndex-derived re-render
+  }, [step])
+
   const calorieTarget = (() => {
     const w = parseFloat(form.weightKg) || 65
     const h = parseFloat(form.heightCm) || 165
@@ -97,10 +107,12 @@ export default function OnboardingScreen({
 
   const next = () => {
     const idx = STEPS.indexOf(step)
+    track("onboarding_step_completed", { step, step_index: idx })
     if (idx < STEPS.length - 1) {
       setStep(STEPS[idx + 1])
       return
     }
+    track("onboarding_completed", { goal: form.goal || "general_health" })
     onComplete({
       name: form.name,
       age: parseInt(form.age) || 25,

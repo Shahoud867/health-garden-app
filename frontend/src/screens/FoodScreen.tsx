@@ -4,6 +4,7 @@ import { t } from "../types"
 import { searchFoods, listUsualFoods } from "../lib/api/reference"
 import { addFoodLog, deleteFoodLog } from "../lib/api/logs"
 import { useToast } from "../hooks/useToast"
+import { track } from "../lib/analytics"
 import type { FoodRow } from "../lib/database.types"
 import SyncBadge from "../components/SyncBadge"
 import { Spinner, Skeleton } from "../components/Loading"
@@ -119,6 +120,7 @@ export default function FoodScreen({
           : null,
         sugarFlagSnapshot: food.sugar_flag,
       })
+      track("log_created", { type: "food" })
       await refetch()
       setSelected(null)
       setQuery("")

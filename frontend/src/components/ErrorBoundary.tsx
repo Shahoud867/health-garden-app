@@ -1,4 +1,5 @@
 import { Component, type ReactNode } from "react"
+import { reportError } from "../lib/analytics"
 
 interface Props {
   children: ReactNode
@@ -24,10 +25,13 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: { componentStack?: string | null }) {
-    // eslint-disable-next-line no-console -- no error-tracking service wired
-    // into this client yet (see README's "Remaining work"); console is the
-    // only sink available until one is.
+    // eslint-disable-next-line no-console -- reportError() below is a
+    // best-effort, fire-and-forget network call (a no-op without
+    // VITE_SENTRY_DSN configured, per lib/observability/sentry.ts) --
+    // console stays as the guaranteed-visible sink either way, exactly
+    // like every other error path in this app.
     console.error("Unhandled render error:", error, info.componentStack)
+    reportError(error, { componentStack: info.componentStack ?? undefined })
   }
 
   render() {

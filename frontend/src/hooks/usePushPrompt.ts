@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { isPushSupported, enablePushNotifications } from "../lib/push"
 import { useToast } from "./useToast"
+import { track } from "../lib/analytics"
 import type { Lang } from "../types"
 
 const DISMISSED_KEY = "hg_push_prompt_dismissed"
@@ -66,6 +67,7 @@ export function usePushPrompt(
     setEnabling(true)
     enablePushNotifications(userId)
       .then((outcome) => {
+        track("push_permission_result", { outcome })
         if (outcome === "granted") {
           showToast(
             lang === "ur" ? "یاد دہانیاں فعال ہو گئیں۔" : "Reminders enabled.",

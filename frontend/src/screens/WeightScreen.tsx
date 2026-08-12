@@ -4,6 +4,7 @@ import { t } from "../types"
 import { upsertWeightLog } from "../lib/api/logs"
 import { todayLocalDate } from "../lib/date"
 import { useToast } from "../hooks/useToast"
+import { track } from "../lib/analytics"
 import SyncBadge from "../components/SyncBadge"
 import { Spinner } from "../components/Loading"
 import {
@@ -49,6 +50,7 @@ export default function WeightScreen({
     setSaving(true)
     try {
       await upsertWeightLog(userId, w, todayLocalDate())
+      track("log_created", { type: "weight" })
       await refetch()
       setLogged(true)
     } catch (err) {

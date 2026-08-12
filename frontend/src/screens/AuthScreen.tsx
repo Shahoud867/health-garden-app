@@ -9,6 +9,7 @@ import {
   resendConfirmationEmail,
 } from "../lib/api/auth"
 import { useToast } from "../hooks/useToast"
+import { track } from "../lib/analytics"
 import PlantSVG from "../components/PlantSVG"
 import { Spinner } from "../components/Loading"
 import {
@@ -60,14 +61,17 @@ export default function AuthScreen({
           // email confirmation before a session is issued -- the normal,
           // secure default. A session back means confirmations are off
           // (e.g. local dev) and the user is already logged in.
+          track("signup_submitted", { needs_email_confirmation: true })
           setNeedsConfirmation(true)
           navigate("email-verify")
           return
         }
+        track("signup_submitted", { needs_email_confirmation: false })
         onAuth()
         return
       }
       await signIn(email, password)
+      track("login_completed")
       onAuth()
     } catch (err) {
       showToast(

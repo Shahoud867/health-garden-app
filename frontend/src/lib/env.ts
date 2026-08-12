@@ -23,6 +23,16 @@ interface AppEnv {
    *  server is allowed to push to a subscription. Push-enable UI degrades to
    *  not offering the option at all rather than the app failing to boot. */
   vapidPublicKey: string | undefined
+  /** Same key the backend's POSTHOG_API_KEY uses (Blueprint ADR-013) --
+   *  undefined until a real PostHog project exists. See
+   *  lib/observability/posthog.ts: degrades to a silent no-op, not a boot
+   *  failure. */
+  posthogApiKey: string | undefined
+  posthogHost: string
+  /** Same DSN the backend's SENTRY_DSN uses. See
+   *  lib/observability/sentry.ts: degrades to a silent no-op, not a boot
+   *  failure. */
+  sentryDsn: string | undefined
 }
 
 function readEnv(): AppEnv {
@@ -30,6 +40,10 @@ function readEnv(): AppEnv {
   const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
   const turnstileSiteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY || undefined
   const vapidPublicKey = import.meta.env.VITE_VAPID_PUBLIC_KEY || undefined
+  const posthogApiKey = import.meta.env.VITE_POSTHOG_API_KEY || undefined
+  const posthogHost =
+    import.meta.env.VITE_POSTHOG_HOST || "https://us.i.posthog.com"
+  const sentryDsn = import.meta.env.VITE_SENTRY_DSN || undefined
 
   const missing: string[] = []
   if (!supabaseUrl) missing.push("VITE_SUPABASE_URL")
@@ -46,7 +60,15 @@ function readEnv(): AppEnv {
     )
   }
 
-  return { supabaseUrl, supabaseAnonKey, turnstileSiteKey, vapidPublicKey }
+  return {
+    supabaseUrl,
+    supabaseAnonKey,
+    turnstileSiteKey,
+    vapidPublicKey,
+    posthogApiKey,
+    posthogHost,
+    sentryDsn,
+  }
 }
 
 export const env: AppEnv = readEnv()

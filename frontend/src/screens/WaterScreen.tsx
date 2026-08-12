@@ -8,6 +8,7 @@ import {
 } from "../lib/api/logs"
 import { localDateDaysAgo } from "../lib/date"
 import { useToast } from "../hooks/useToast"
+import { track } from "../lib/analytics"
 import SyncBadge from "../components/SyncBadge"
 import { Spinner } from "../components/Loading"
 import {
@@ -63,6 +64,7 @@ export default function WaterScreen({
     setPending(true)
     try {
       await addWaterGlass(userId)
+      track("log_created", { type: "water" })
       await refetch()
     } catch (err) {
       showToast(

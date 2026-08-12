@@ -79,7 +79,7 @@ const PRIVACY: Block[] = [
       "Supabase — hosts our database and handles sign-in.",
       "Google Gemini — generates Premium AI replies and plans. Free users’ data is never sent to it.",
       "Cloudflare Turnstile — checks that sign-ups and payment submissions come from a person, not a script.",
-      "Sentry and PostHog — receive crash reports and anonymous usage statistics.",
+      "Sentry and PostHog — when enabled, receive crash reports and anonymous usage statistics.",
       "Each receives only what it needs to do its job. None of them are permitted to sell your data.",
     ],
   },
