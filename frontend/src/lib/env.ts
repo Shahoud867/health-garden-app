@@ -16,12 +16,20 @@ interface AppEnv {
    *  whole app failing to boot (unlike the two Supabase values below, every
    *  screen needs those). */
   turnstileSiteKey: string | undefined
+  /** Undefined until a real VAPID key pair is generated (`.env.example`'s
+   *  root-level comment: "PUBLIC key ships to the web client's
+   *  push-subscription call"). The public half only, matching the pair's own
+   *  design — safe to expose, it can't sign anything, only identify which
+   *  server is allowed to push to a subscription. Push-enable UI degrades to
+   *  not offering the option at all rather than the app failing to boot. */
+  vapidPublicKey: string | undefined
 }
 
 function readEnv(): AppEnv {
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
   const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
   const turnstileSiteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY || undefined
+  const vapidPublicKey = import.meta.env.VITE_VAPID_PUBLIC_KEY || undefined
 
   const missing: string[] = []
   if (!supabaseUrl) missing.push("VITE_SUPABASE_URL")
@@ -38,7 +46,7 @@ function readEnv(): AppEnv {
     )
   }
 
-  return { supabaseUrl, supabaseAnonKey, turnstileSiteKey }
+  return { supabaseUrl, supabaseAnonKey, turnstileSiteKey, vapidPublicKey }
 }
 
 export const env: AppEnv = readEnv()

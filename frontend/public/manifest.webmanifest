@@ -1,0 +1,19 @@
+{
+  "name": "Health Garden",
+  "short_name": "Health Garden",
+  "description": "Track food, water, workouts, and weight in local units — a garden that grows with every log and never resets.",
+  "start_url": "/?source=pwa",
+  "id": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#fdf8ee",
+  "theme_color": "#6c9e36",
+  "orientation": "portrait-primary",
+  "lang": "en",
+  "dir": "ltr",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

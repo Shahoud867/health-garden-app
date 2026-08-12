@@ -1,6 +1,8 @@
 import type { NavProps, AppState } from "../types"
 import { CYCLE_LENGTH } from "../types"
 import PlantImage from "../components/PlantImage"
+import PushPromptBanner from "../components/PushPromptBanner"
+import { usePushPrompt } from "../hooks/usePushPrompt"
 import {
   ActionTile,
   FlameIcon,
@@ -16,6 +18,7 @@ import {
 interface Props extends NavProps {
   state: AppState
   setState: (p: Partial<AppState>) => void
+  userId: string
 }
 
 const GARDEN_META = [
@@ -51,7 +54,7 @@ const GARDEN_META = [
   },
 ] as const
 
-export default function HomeScreen({ navigate, lang, state }: Props) {
+export default function HomeScreen({ navigate, lang, state, userId }: Props) {
   const { user, today, garden } = state
   const firstName =
     user.name?.trim().split(/\s+/)[0] || (lang === "ur" ? "دوست" : "there")
@@ -60,6 +63,12 @@ export default function HomeScreen({ navigate, lang, state }: Props) {
   const waterGoal = 8
   const activeGoal = 30
   const weeklyProgress = Math.round((habitsMet / 5) * 100)
+  const hasLoggedToday =
+    today.caloriesLogged > 0 ||
+    today.waterGlasses > 0 ||
+    today.workoutMinutes > 0 ||
+    today.weightLog !== null
+  const pushPrompt = usePushPrompt(hasLoggedToday, userId, lang)
 
   return (
     <div className="min-h-screen pb-24 pt-3">
@@ -110,6 +119,17 @@ export default function HomeScreen({ navigate, lang, state }: Props) {
             </div>
           </Panel>
         </div>
+
+        {pushPrompt.visible && (
+          <div className="mt-3">
+            <PushPromptBanner
+              lang={lang}
+              enabling={pushPrompt.enabling}
+              onEnable={pushPrompt.enable}
+              onDismiss={pushPrompt.dismiss}
+            />
+          </div>
+        )}
 
         <div className="mt-3 grid grid-cols-4 gap-1.5">
           <StatTile

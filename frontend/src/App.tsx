@@ -242,7 +242,14 @@ function AppShell() {
         )
 
       case "home":
-        return <HomeScreen {...navProps} state={data} setState={setData} />
+        return (
+          <HomeScreen
+            {...navProps}
+            state={data}
+            setState={setData}
+            userId={userId}
+          />
+        )
 
       case "food":
         return (
