@@ -1,0 +1,9 @@
+# SPA fallback for the router added in lib/router.ts -- every real URL
+# (/food, /garden, /weight, ...) needs to resolve to the same index.html
+# and let the client-side router take over from there, or a direct load
+# or reload of any URL but "/" 404s on the host instead of opening the app.
+#
+# Netlify and Cloudflare Pages both read this exact file/format from the
+# publish directory. See vercel.json for the equivalent on Vercel -- kept
+# both since README's Deployment section hasn't picked a host yet.
+/*    /index.html   200

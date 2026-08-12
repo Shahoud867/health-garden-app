@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import type { Screen, Lang } from "./types"
 import { AuthProvider, useAuth } from "./hooks/useAuth"
 import { ToastProvider, useToast } from "./hooks/useToast"
+import { useScreenRouter } from "./hooks/useScreenRouter"
 import { ErrorBoundary } from "./components/ErrorBoundary"
 import { FullScreenLoading } from "./components/Loading"
 import { useAppData } from "./hooks/useAppData"
@@ -65,10 +66,8 @@ function AppShell() {
   // source every screen reads from, never session.user.id directly.
   const userId = profile?.id ?? ""
   const { showToast } = useToast()
-  const [screen, setScreen] = useState<Screen>("landing")
+  const { screen, navigate } = useScreenRouter()
   const [lang, setLangRaw] = useState<Lang>("en")
-
-  const navigate = (s: Screen) => setScreen(s)
 
   useEffect(() => {
     window.scrollTo(0, 0)
