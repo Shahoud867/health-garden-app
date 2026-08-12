@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { Suspense, lazy, useEffect, useState } from "react"
 import type { Screen, Lang } from "./types"
 import { AuthProvider, useAuth } from "./hooks/useAuth"
 import { ToastProvider, useToast } from "./hooks/useToast"
@@ -10,22 +10,28 @@ import { signOut } from "./lib/api/auth"
 import { updateProfile } from "./lib/api/profile"
 import type { Goal } from "./lib/database.types"
 import BottomNav from "./components/BottomNav"
+// Eager: the pre-auth critical path (a brand-new, not-yet-signed-up visitor
+// needs these with no loading flash -- the highest-traffic, most latency-
+// sensitive screens in the app, and small on their own). Every screen past
+// this point only exists behind a real session, so it's lazy-loaded below
+// instead of shipped in everyone's first-load bundle.
 import LandingScreen from "./screens/LandingScreen"
 import AuthScreen from "./screens/AuthScreen"
-import OnboardingScreen from "./screens/OnboardingScreen"
-import HomeScreen from "./screens/HomeScreen"
-import FoodScreen from "./screens/FoodScreen"
-import WorkoutScreen from "./screens/WorkoutScreen"
-import WaterScreen from "./screens/WaterScreen"
-import WeightScreen from "./screens/WeightScreen"
-import GardenScreen from "./screens/GardenScreen"
-import AICoachScreen from "./screens/AICoachScreen"
-import AIPlanScreen from "./screens/AIPlanScreen"
-import PremiumScreen from "./screens/PremiumScreen"
 import PricingScreen from "./screens/PricingScreen"
-import ProfileScreen from "./screens/ProfileScreen"
 import LegalScreen from "./screens/LegalScreen"
 import type { AppState } from "./types"
+
+const OnboardingScreen = lazy(() => import("./screens/OnboardingScreen"))
+const HomeScreen = lazy(() => import("./screens/HomeScreen"))
+const FoodScreen = lazy(() => import("./screens/FoodScreen"))
+const WorkoutScreen = lazy(() => import("./screens/WorkoutScreen"))
+const WaterScreen = lazy(() => import("./screens/WaterScreen"))
+const WeightScreen = lazy(() => import("./screens/WeightScreen"))
+const GardenScreen = lazy(() => import("./screens/GardenScreen"))
+const AICoachScreen = lazy(() => import("./screens/AICoachScreen"))
+const AIPlanScreen = lazy(() => import("./screens/AIPlanScreen"))
+const PremiumScreen = lazy(() => import("./screens/PremiumScreen"))
+const ProfileScreen = lazy(() => import("./screens/ProfileScreen"))
 
 const AUTH_SCREENS: Screen[] = [
   "landing",
@@ -375,7 +381,7 @@ function AppShell() {
         <div className="absolute -bottom-28 left-10 h-72 w-72 rounded-full bg-[#e3ab25]/12 blur-3xl" />
       </div>
       <div className="relative z-10">
-        {renderScreen()}
+        <Suspense fallback={<FullScreenLoading />}>{renderScreen()}</Suspense>
         {showNav && <BottomNav {...navProps} />}
       </div>
     </div>
