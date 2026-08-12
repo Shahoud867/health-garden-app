@@ -386,10 +386,10 @@ function AppShell() {
         <div className="absolute top-[18%] -right-24 h-64 w-64 rounded-full bg-[#3b8f9f]/10 blur-3xl" />
         <div className="absolute -bottom-28 left-10 h-72 w-72 rounded-full bg-[#e3ab25]/12 blur-3xl" />
       </div>
-      <div className="relative z-10">
+      <main className="relative z-10">
         <Suspense fallback={<FullScreenLoading />}>{renderScreen()}</Suspense>
-        {showNav && <BottomNav {...navProps} />}
-      </div>
+      </main>
+      {showNav && <BottomNav {...navProps} />}
     </div>
   )
 }
