@@ -6,7 +6,9 @@ import { useToast } from "../hooks/useToast"
 import type { PermanentGardenRow } from "../lib/database.types"
 import PlantImage from "../components/PlantImage"
 import GardenBoard from "../components/GardenBoard"
-import { Skeleton } from "../components/Loading"
+import { Skeleton, Spinner } from "../components/Loading"
+import { renderGardenShareImage } from "../lib/shareImage"
+import { pathForScreen } from "../lib/router"
 import {
   GARDEN_THEMES,
   DEFAULT_THEME_SLUG,
@@ -145,9 +147,70 @@ function PlantProgress({
 export default function GardenScreen({ navigate, lang, state, userId }: Props) {
   const { showToast } = useToast()
   const [tab, setTab] = useState<"week" | "gardens" | "history">("week")
+  const [sharing, setSharing] = useState(false)
   const { garden } = state
   const totalMet = garden.filter((p) => p.metToday).length
   const allResting = totalMet === 0
+
+  // No reward attached, no "invite a friend" mechanics -- just a real
+  // reason and a real mechanism to show someone else what's growing.
+  // Canvas-rendered (see lib/shareImage.ts's doc comment for why, not
+  // composited from the plant art itself), so this works today regardless
+  // of the still-missing LFS artwork.
+  const handleShare = async () => {
+    setSharing(true)
+    try {
+      const blob = await renderGardenShareImage({
+        garden,
+        displayName: state.user.name,
+        lang,
+      })
+      const shareUrl = `${window.location.origin}${pathForScreen("garden")}`
+      const shareText =
+        lang === "ur"
+          ? "میرا صحت باغیچہ دیکھیں — ہر اچھا انتخاب اسے بڑھاتا ہے۔"
+          : "Check out my Health Garden — every good choice grows it."
+      const file = new File([blob], "my-health-garden.png", {
+        type: "image/png",
+      })
+
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file], text: shareText, url: shareUrl })
+        return
+      }
+      if (navigator.share) {
+        await navigator.share({ text: shareText, url: shareUrl })
+        return
+      }
+
+      // No Web Share API (most desktop browsers) -- download the image
+      // instead so there's still something to actually share.
+      const objectUrl = URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.href = objectUrl
+      link.download = "my-health-garden.png"
+      link.click()
+      URL.revokeObjectURL(objectUrl)
+      showToast(
+        lang === "ur"
+          ? "تصویر ڈاؤن لوڈ ہو گئی۔"
+          : "Image downloaded — share it however you like.",
+        "success",
+      )
+    } catch (err) {
+      // AbortError fires when the user just closes the native share sheet
+      // without picking anything -- a real cancellation, not a failure.
+      if (err instanceof DOMException && err.name === "AbortError") return
+      showToast(
+        err instanceof Error
+          ? err.message
+          : "Could not create the share image.",
+        "error",
+      )
+    } finally {
+      setSharing(false)
+    }
+  }
 
   const [permanentGarden, setPermanentGarden] =
     useState<PermanentGardenRow[] | null>(null)
@@ -200,12 +263,22 @@ export default function GardenScreen({ navigate, lang, state, userId }: Props) {
   return (
     <div className="min-h-screen px-5 pb-10 pt-5">
       <div className="mx-auto max-w-[460px]">
-        <button
-          onClick={() => navigate("home")}
-          className="mb-4 inline-flex items-center gap-2 text-sm font-bold text-[#7b6851]"
-        >
-          <ChevronLeftIcon className="h-4 w-4" /> {t("back", lang)}
-        </button>
+        <div className="mb-4 flex items-center justify-between">
+          <button
+            onClick={() => navigate("home")}
+            className="inline-flex items-center gap-2 text-sm font-bold text-[#7b6851]"
+          >
+            <ChevronLeftIcon className="h-4 w-4" /> {t("back", lang)}
+          </button>
+          <button
+            onClick={handleShare}
+            disabled={sharing}
+            className="inline-flex items-center gap-1.5 rounded-full bg-[#6c9e36] px-4 py-2 text-[12px] font-extrabold text-white disabled:opacity-70"
+          >
+            {sharing && <Spinner size={13} color="#fff" />}
+            {lang === "ur" ? "شیئر کریں" : "Share"}
+          </button>
+        </div>
 
         <PageTitle
           eyebrow={lang === "ur" ? "باغیچہ" : "Garden"}
