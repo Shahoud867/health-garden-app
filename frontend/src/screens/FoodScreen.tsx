@@ -5,6 +5,7 @@ import { searchFoods, listUsualFoods } from "../lib/api/reference"
 import { addFoodLog, deleteFoodLog } from "../lib/api/logs"
 import { useToast } from "../hooks/useToast"
 import { track } from "../lib/analytics"
+import { enqueueWrite, isOfflineLikeError } from "../lib/offlineQueue"
 import type { FoodRow } from "../lib/database.types"
 import SyncBadge from "../components/SyncBadge"
 import { Spinner, Skeleton } from "../components/Loading"
@@ -29,7 +30,12 @@ type Slot = "breakfast" | "lunch" | "dinner" | "snack"
  * relative to the dish's own base unit -- so switching from katori to plate
  * scales the calories instead of only relabelling them.
  */
-const UNIT_OPTIONS: { val: string; en: string; ur: string; factor: number }[] = [
+const UNIT_OPTIONS: {
+  val: string
+  en: string
+  ur: string
+  factor: number
+}[] = [
   { val: "katori", en: "Katori", ur: "کٹوری", factor: 1 },
   { val: "cup", en: "Cup", ur: "کپ", factor: 1.25 },
   { val: "bowl", en: "Bowl", ur: "پیالہ", factor: 1.5 },
@@ -49,6 +55,7 @@ export default function FoodScreen({
   navigate,
   lang,
   state,
+  setState,
   userId,
   refetch,
 }: Props) {
@@ -108,28 +115,51 @@ export default function FoodScreen({
 
   const logFood = async (food: FoodRow) => {
     const scale = qty * unitScale(food.portion_unit, unit)
+    const entry = {
+      foodId: food.id,
+      mealSlot: slot,
+      quantity: qty,
+      caloriesSnapshot: Math.round((food.calories ?? 0) * scale),
+      proteinGSnapshot: food.protein_g
+        ? Math.round(food.protein_g * scale * 10) / 10
+        : null,
+      sugarFlagSnapshot: food.sugar_flag,
+    }
     setSaving(true)
+
+    // See WeightScreen's identical comment: offline is checked upfront
+    // rather than waited out, and the same fallback applies if the request
+    // fails mid-flight despite navigator.onLine reporting true.
+    if (!navigator.onLine) {
+      await enqueueWrite("food", { userId, entry })
+      setState({ syncStatus: "pending" })
+      setSelected(null)
+      setQuery("")
+      showToast(t("syncPending", lang), "success")
+      setSaving(false)
+      return
+    }
+
     try {
-      await addFoodLog(userId, {
-        foodId: food.id,
-        mealSlot: slot,
-        quantity: qty,
-        caloriesSnapshot: Math.round((food.calories ?? 0) * scale),
-        proteinGSnapshot: food.protein_g
-          ? Math.round(food.protein_g * scale * 10) / 10
-          : null,
-        sugarFlagSnapshot: food.sugar_flag,
-      })
+      await addFoodLog(userId, entry)
       track("log_created", { type: "food" })
       await refetch()
       setSelected(null)
       setQuery("")
       showToast(lang === "ur" ? "کھانا درج ہو گیا" : "Meal logged.", "success")
     } catch (err) {
-      showToast(
-        err instanceof Error ? err.message : "Could not log that meal.",
-        "error",
-      )
+      if (isOfflineLikeError(err)) {
+        await enqueueWrite("food", { userId, entry })
+        setState({ syncStatus: "pending" })
+        setSelected(null)
+        setQuery("")
+        showToast(t("syncPending", lang), "success")
+      } else {
+        showToast(
+          err instanceof Error ? err.message : "Could not log that meal.",
+          "error",
+        )
+      }
     } finally {
       setSaving(false)
     }

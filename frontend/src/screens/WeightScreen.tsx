@@ -5,6 +5,7 @@ import { upsertWeightLog } from "../lib/api/logs"
 import { todayLocalDate } from "../lib/date"
 import { useToast } from "../hooks/useToast"
 import { track } from "../lib/analytics"
+import { enqueueWrite, isOfflineLikeError } from "../lib/offlineQueue"
 import SyncBadge from "../components/SyncBadge"
 import { Spinner } from "../components/Loading"
 import {
@@ -27,6 +28,7 @@ export default function WeightScreen({
   navigate,
   lang,
   state,
+  setState,
   userId,
   refetch,
 }: Props) {
@@ -48,16 +50,42 @@ export default function WeightScreen({
       return
     }
     setSaving(true)
+    const today = todayLocalDate()
+
+    // Offline (or a connection too flaky to reach the server at all) is
+    // known upfront -- no reason to wait out a 15s timeout to discover
+    // what navigator.onLine already knows. A save made offline still queues
+    // and still reflects locally; it just isn't real until it replays.
+    if (!navigator.onLine) {
+      await enqueueWrite("weight", { userId, weightKg: w, date: today })
+      setState({ syncStatus: "pending" })
+      setLogged(true)
+      setSaving(false)
+      showToast(t("syncPending", lang), "success")
+      return
+    }
+
     try {
-      await upsertWeightLog(userId, w, todayLocalDate())
+      await upsertWeightLog(userId, w, today)
       track("log_created", { type: "weight" })
       await refetch()
       setLogged(true)
     } catch (err) {
-      showToast(
-        err instanceof Error ? err.message : "Could not save your weight.",
-        "error",
-      )
+      if (isOfflineLikeError(err)) {
+        // navigator.onLine reported true but the request still never
+        // reached the server -- a real, if less common, gap that flag has
+        // (e.g. a captive portal, or connectivity that dropped between the
+        // check above and this request). Same outcome either way: queue it.
+        await enqueueWrite("weight", { userId, weightKg: w, date: today })
+        setState({ syncStatus: "pending" })
+        setLogged(true)
+        showToast(t("syncPending", lang), "success")
+      } else {
+        showToast(
+          err instanceof Error ? err.message : "Could not save your weight.",
+          "error",
+        )
+      }
     } finally {
       setSaving(false)
     }

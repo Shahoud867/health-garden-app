@@ -6,9 +6,10 @@ import {
   removeLastWaterGlass,
   getWaterHistory,
 } from "../lib/api/logs"
-import { localDateDaysAgo } from "../lib/date"
+import { localDateDaysAgo, todayLocalDate } from "../lib/date"
 import { useToast } from "../hooks/useToast"
 import { track } from "../lib/analytics"
+import { enqueueWrite, isOfflineLikeError } from "../lib/offlineQueue"
 import SyncBadge from "../components/SyncBadge"
 import { Spinner } from "../components/Loading"
 import {
@@ -41,6 +42,7 @@ export default function WaterScreen({
   navigate,
   lang,
   state,
+  setState,
   userId,
   refetch,
 }: Props) {
@@ -59,23 +61,58 @@ export default function WaterScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, glasses])
 
+  /** Queues offline like the other three logging screens (see
+   * WeightScreen's identical comment) -- but also, uniquely among them,
+   * updates the on-screen count optimistically either way. A glass count is
+   * simple and safe to predict client-side (glasses + 1, always), unlike
+   * weight/garden state, which only the server's own derivation can
+   * actually produce -- so there's no reason to make this one wait. */
   const addGlass = async () => {
     if (pending) return
     setPending(true)
+    const today = todayLocalDate()
+
+    if (!navigator.onLine) {
+      await enqueueWrite("water", { userId, date: today })
+      setState({
+        today: { ...state.today, waterGlasses: state.today.waterGlasses + 1 },
+        syncStatus: "pending",
+      })
+      setPending(false)
+      return
+    }
+
     try {
       await addWaterGlass(userId)
       track("log_created", { type: "water" })
       await refetch()
     } catch (err) {
-      showToast(
-        err instanceof Error ? err.message : "Could not log that glass.",
-        "error",
-      )
+      if (isOfflineLikeError(err)) {
+        await enqueueWrite("water", { userId, date: today })
+        setState({
+          today: {
+            ...state.today,
+            waterGlasses: state.today.waterGlasses + 1,
+          },
+          syncStatus: "pending",
+        })
+      } else {
+        showToast(
+          err instanceof Error ? err.message : "Could not log that glass.",
+          "error",
+        )
+      }
     } finally {
       setPending(false)
     }
   }
 
+  // Deliberately not offline-queued: "remove the most recent glass" needs
+  // to know which real row that is, which a client that might already have
+  // its own unsynced queued glasses can't safely determine offline. Still
+  // requires connectivity, same as before this change -- undoing an
+  // uncertain server-side state blindly would be worse than just asking to
+  // wait for a connection.
   const removeGlass = async () => {
     if (pending || glasses === 0) return
     setPending(true)

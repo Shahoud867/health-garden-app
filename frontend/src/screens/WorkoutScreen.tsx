@@ -4,6 +4,7 @@ import { t } from "../types"
 import { addWorkoutLog, deleteWorkoutLog } from "../lib/api/logs"
 import { useToast } from "../hooks/useToast"
 import { track } from "../lib/analytics"
+import { enqueueWrite, isOfflineLikeError } from "../lib/offlineQueue"
 import SyncBadge from "../components/SyncBadge"
 import { Spinner } from "../components/Loading"
 import {
@@ -110,6 +111,7 @@ export default function WorkoutScreen({
   navigate,
   lang,
   state,
+  setState,
   userId,
   refetch,
 }: Props) {
@@ -131,15 +133,29 @@ export default function WorkoutScreen({
   const log = async () => {
     if (!selected) return
     setSaving(true)
+    // WORKOUTS is a curated quick-log catalog, not tied to real exercises
+    // rows -- exerciseId is intentionally omitted (workout_logs.exercise_id
+    // is nullable, migration 0004); duration/caloriesBurned are what the
+    // garden's "movement" goal and today's totals actually key on.
+    const entry = {
+      durationMin: duration,
+      caloriesBurned: selected.calPerMin * duration,
+    }
+
+    // See WeightScreen's identical comment: offline is checked upfront
+    // rather than waited out, and the same fallback applies if the request
+    // fails mid-flight despite navigator.onLine reporting true.
+    if (!navigator.onLine) {
+      await enqueueWrite("workout", { userId, entry })
+      setState({ syncStatus: "pending" })
+      setSelected(null)
+      showToast(t("syncPending", lang), "success")
+      setSaving(false)
+      return
+    }
+
     try {
-      // WORKOUTS is a curated quick-log catalog, not tied to real exercises
-      // rows -- exerciseId is intentionally omitted (workout_logs.exercise_id
-      // is nullable, migration 0004); duration/caloriesBurned are what the
-      // garden's "movement" goal and today's totals actually key on.
-      await addWorkoutLog(userId, {
-        durationMin: duration,
-        caloriesBurned: selected.calPerMin * duration,
-      })
+      await addWorkoutLog(userId, entry)
       track("log_created", { type: "workout" })
       await refetch()
       setSelected(null)
@@ -148,10 +164,17 @@ export default function WorkoutScreen({
         "success",
       )
     } catch (err) {
-      showToast(
-        err instanceof Error ? err.message : "Could not log that workout.",
-        "error",
-      )
+      if (isOfflineLikeError(err)) {
+        await enqueueWrite("workout", { userId, entry })
+        setState({ syncStatus: "pending" })
+        setSelected(null)
+        showToast(t("syncPending", lang), "success")
+      } else {
+        showToast(
+          err instanceof Error ? err.message : "Could not log that workout.",
+          "error",
+        )
+      }
     } finally {
       setSaving(false)
     }

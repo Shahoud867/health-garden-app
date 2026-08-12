@@ -1,8 +1,9 @@
-import { Suspense, lazy, useEffect, useState } from "react"
+import { Suspense, lazy, useCallback, useEffect, useState } from "react"
 import type { Screen, Lang } from "./types"
 import { AuthProvider, useAuth } from "./hooks/useAuth"
 import { ToastProvider, useToast } from "./hooks/useToast"
 import { useScreenRouter } from "./hooks/useScreenRouter"
+import { useOfflineSync } from "./hooks/useOfflineSync"
 import { identify, resetIdentity } from "./lib/analytics"
 import { ErrorBoundary } from "./components/ErrorBoundary"
 import { FullScreenLoading } from "./components/Loading"
@@ -84,23 +85,16 @@ function AppShell() {
     window.scrollTo(0, 0)
   }, [screen])
 
-  // Real signal, not decorative: every write in this app is an awaited
-  // round trip (no offline queue exists yet -- see README's "Remaining
-  // work"), so "pending" never applies here. "Offline" reflects the
-  // browser's actual connectivity; a write attempted while offline still
-  // surfaces its own error toast from the screen that made it.
-  useEffect(() => {
-    const goOnline = () => setData({ syncStatus: "synced" })
-    const goOffline = () => setData({ syncStatus: "offline" })
-    window.addEventListener("online", goOnline)
-    window.addEventListener("offline", goOffline)
-    if (!navigator.onLine) goOffline()
-    return () => {
-      window.removeEventListener("online", goOnline)
-      window.removeEventListener("offline", goOffline)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  // Real signal, not decorative: "offline" reflects the browser's actual
+  // connectivity, and "pending" now means what it says -- a write made
+  // while offline (or that failed mid-flight) queues locally instead of
+  // just failing, and replays the moment the browser comes back online
+  // (see useOfflineSync.ts, and each logging screen's own catch block).
+  const setSyncStatus = useCallback(
+    (s: AppState["syncStatus"]) => setData({ syncStatus: s }),
+    [setData],
+  )
+  useOfflineSync(refetch, setSyncStatus)
 
   // Reactive redirect once a session resolves (login/signup succeeded, or a
   // persisted session was restored on boot) -- screens call the real auth
