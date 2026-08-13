@@ -41,6 +41,13 @@ export interface QueuedWrite {
   type: QueuedWriteType
   payload: unknown
   createdAt: string
+  /** Monotonic tiebreaker for replay order. `createdAt` alone is only
+   * millisecond-resolution -- two writes queued in the same millisecond
+   * (a real possibility: two rapid taps while offline) would otherwise sort
+   * by IndexedDB's primary-key order, i.e. by the random `id` UUID, not by
+   * the order they actually happened in. `seq` is strictly increasing
+   * within a page session, so `getQueuedWrites()`'s sort is never ambiguous. */
+  seq: number
 }
 
 function openDb(): Promise<IDBDatabase> {
@@ -57,16 +64,20 @@ function openDb(): Promise<IDBDatabase> {
   })
 }
 
+let sequenceCounter = 0
+
 export async function enqueueWrite(
   type: QueuedWriteType,
   payload: unknown,
 ): Promise<QueuedWrite> {
   const db = await openDb()
+  sequenceCounter += 1
   const item: QueuedWrite = {
     id: crypto.randomUUID(),
     type,
     payload,
     createdAt: new Date().toISOString(),
+    seq: sequenceCounter,
   }
   await new Promise<void>((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, "readwrite")
@@ -89,7 +100,14 @@ export async function getQueuedWrites(): Promise<QueuedWrite[]> {
     req.onerror = () => reject(req.error)
   })
   db.close()
-  return items.sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+  // `seq` first (see QueuedWrite's doc comment); `createdAt` only as a
+  // fallback for any pre-existing queued item written before `seq` existed
+  // (a real IndexedDB persists across a deploy, unlike this test suite's
+  // fresh in-memory fake-indexeddb each run).
+  return items.sort((a, b) => {
+    if (a.seq !== undefined && b.seq !== undefined) return a.seq - b.seq
+    return a.createdAt.localeCompare(b.createdAt)
+  })
 }
 
 export async function removeQueuedWrite(id: string): Promise<void> {
