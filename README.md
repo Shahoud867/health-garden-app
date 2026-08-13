@@ -45,9 +45,9 @@ for premium plans/chat.
 | **Edge Functions**           | Auth-adjacent (export/delete), AI (chat/plan), interim payments, background jobs                   | ✅ Complete                                                                                     |
 | **Background processing**    | `pg_cron`/`pg_net`: engagement nudges, quota watchdog, payment reconciliation                      | ✅ Complete                                                                                     |
 | **Web client (`frontend/`)** | Vite + React 19 + Tailwind v4, all 17 screens wired to real Supabase Auth/PostgREST/Edge Functions | ✅ Complete, verified against a real local Supabase stack in CI — not yet a live hosted project |
-| **Real merchant payments**   | `payments-create-checkout`/`payments-webhook` (ADR-008's real-API path)                            | ⏳ Gated — no merchant account yet                                                              |
-| **Production accounts**      | Sentry, PostHog, UptimeRobot, live Supabase project, Google OAuth, Cloudflare Turnstile            | ⏳ Not provisioned                                                                              |
-| **Automated frontend tests** | Vitest unit suite (45 tests, mocked) + Playwright E2E suite (9 tests, real local Supabase stack)   | ✅ Both suites green in CI                                                                      |
+| **Real merchant payments**   | `payments-jazzcash-create`/`payments-jazzcash-webhook` — JazzCash Mobile Wallet (ADR-0028)         | ✅ Code complete — ⏳ needs real JazzCash credentials + sandbox hash validation, see ADR-0028   |
+| **Production accounts**      | Sentry, PostHog, UptimeRobot, live Supabase project, Google OAuth, Cloudflare Turnstile, JazzCash  | ⏳ Not provisioned                                                                              |
+| **Automated frontend tests** | Vitest unit suite (74 tests, mocked) + Playwright E2E suite (15 tests, real local Supabase stack)  | ✅ Both suites green in CI                                                                      |
 | React Native mobile port     | Only if the retention gate (Blueprint §13.6) clears                                                | Gated                                                                                           |
 
 The backend was built first, phase by phase, against the blueprint (§13.2) — see
@@ -467,6 +467,8 @@ supabase/
     ai-plan-generate/       Retrieval-grounded diet/workout plans, regeneration cap
     payments-submit-intent/  Interim payment verification — submission (ADR-008)
     payments-approve-intent/ Interim payment verification — founder approval (ADR-0025)
+    payments-jazzcash-create/  Real-time JazzCash checkout — creation (ADR-0028)
+    payments-jazzcash-webhook/ Real-time JazzCash checkout — callback/activation (ADR-0028)
     notify-inactive-users/   Engagement-nudge Web Push, cron-triggered
     gemini-quota-watchdog/   Disables ai_chat_enabled near the known Gemini quota
     payment-reconciliation/  Flags payment_intents stuck in pending_review past 48h
@@ -655,6 +657,11 @@ done it.
 2. **Set Edge Function secrets** (`GEMINI_API_KEY`, `TURNSTILE_SECRET_KEY`, cron auth token,
    Sentry/PostHog if used) via `supabase secrets set` or the dashboard — never in a committed
    file.
+   - For real-time JazzCash payments (ADR-0028), also set `JAZZCASH_MERCHANT_ID`,
+     `JAZZCASH_PASSWORD`, `JAZZCASH_INTEGRITY_SALT`, `JAZZCASH_MODE`, `JAZZCASH_RETURN_URL`, and
+     `PUBLIC_APP_URL` (see `.env.example`) — obtained from JazzCash's own merchant onboarding,
+     never fabricated. Confirm the callback hash against one real JazzCash sandbox transaction
+     before switching `JAZZCASH_MODE` to `production` — see ADR-0028's Consequences section.
 3. **Deploy Edge Functions**: `supabase functions deploy <name>` per function, or wire
    `.github/workflows/` to do it on merge to `main` (not currently configured — the existing CI
    only tests, it doesn't deploy).
@@ -718,9 +725,15 @@ own no-placeholders convention (see [CONTRIBUTING.md](CONTRIBUTING.md)).
 - **Google OAuth and Cloudflare Turnstile are not configured** in any real account — both code
   paths are real and correct, but will error (clearly, not silently) until those accounts exist.
   See [Deployment](#deployment).
-- **Real merchant payments** (`payments-create-checkout`/`payments-webhook`) remain gated behind
-  ADR-008's cutover trigger, unchanged from before this round — see the ADR for the exact
-  condition.
+- **Real merchant payments** (`payments-jazzcash-create`/`payments-jazzcash-webhook`, ADR-0028)
+  are now code-complete and unit-tested, but need three things only the founders can provide
+  before real money should touch this path: (1) real JazzCash merchant credentials from JazzCash's
+  own onboarding/KYC — nothing in this codebase can substitute for that; (2) one real sandbox
+  transaction to confirm the callback's hash-verification field order, since only the
+  request-side algorithm was sourced from verified real code (see ADR-0028's Consequences); (3)
+  `JAZZCASH_RETURN_URL`/`PUBLIC_APP_URL` set to this deployment's real public URLs. The manual
+  `payments-submit-intent` flow remains the fallback for Easypaisa and for any customer JazzCash's
+  hosted checkout doesn't work for.
 
 **Known, non-blocking:**
 

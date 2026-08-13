@@ -5,6 +5,8 @@ import {
   submitPaymentIntent,
   getActiveSubscription,
   getLatestPaymentIntent,
+  createJazzCashCheckout,
+  submitJazzCashCheckout,
 } from "../lib/api/payments"
 import { useToast } from "../hooks/useToast"
 import { env } from "../lib/env"
@@ -47,6 +49,7 @@ export default function PremiumScreen({
   const [subscriptionUntil, setSubscriptionUntil] = useState<string | null>(
     null,
   )
+  const [redirectingToJazzCash, setRedirectingToJazzCash] = useState(false)
 
   useEffect(() => {
     if (!userId) return
@@ -63,6 +66,52 @@ export default function PremiumScreen({
       })
       .finally(() => setCheckingExisting(false))
   }, [userId, isPremium])
+
+  // Handles the browser's return from JazzCash's hosted checkout --
+  // `payments-jazzcash-webhook` (ADR-0028) redirects here with
+  // `?payment=success|failed` once it has verified JazzCash's own callback.
+  // Runs once on mount only: re-running on every render would re-show the
+  // toast and re-call onUpgrade after the query string is cleared below.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const payment = params.get("payment")
+    if (payment === "success") {
+      showToast(
+        lang === "ur"
+          ? "ادائیگی کامیاب — پریمیم فعال ہو گیا۔"
+          : "Payment successful — premium is now active.",
+        "success",
+      )
+      onUpgrade()
+    } else if (payment === "failed") {
+      showToast(
+        lang === "ur"
+          ? "ادائیگی مکمل نہیں ہو سکی۔ دوبارہ کوشش کریں یا دستی ادائیگی آزمائیں۔"
+          : "Payment could not be completed. Please try again, or use manual payment below.",
+        "error",
+      )
+    }
+    if (payment) {
+      window.history.replaceState({}, "", window.location.pathname)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fire once per mount, see comment above
+  }, [])
+
+  const payWithJazzCash = async () => {
+    setRedirectingToJazzCash(true)
+    try {
+      const checkout = await createJazzCashCheckout()
+      submitJazzCashCheckout(checkout)
+      // The tab navigates away here (real form POST to JazzCash's hosted
+      // checkout page) -- nothing below this line runs on success.
+    } catch (err) {
+      setRedirectingToJazzCash(false)
+      showToast(
+        err instanceof Error ? err.message : "Could not start checkout.",
+        "error",
+      )
+    }
+  }
 
   const submit = async () => {
     if (!txRef.trim() || !turnstileToken) return
@@ -229,10 +278,22 @@ export default function PremiumScreen({
               </Panel>
             </div>
             <button
-              onClick={() => setStep("pay")}
-              className="mt-6 w-full rounded-full bg-[#6c9e36] px-5 py-3.5 font-extrabold text-white"
+              onClick={payWithJazzCash}
+              disabled={redirectingToJazzCash}
+              className="mt-6 flex w-full items-center justify-center gap-2 rounded-full bg-[#6c9e36] px-5 py-3.5 font-extrabold text-white disabled:opacity-70"
             >
-              {lang === "ur" ? "پریمیم حاصل کریں" : "Get Premium"}
+              {redirectingToJazzCash && <Spinner size={16} color="#fff" />}
+              {lang === "ur"
+                ? "جیز کیش سے فوری ادائیگی"
+                : "Pay instantly with JazzCash"}
+            </button>
+            <button
+              onClick={() => setStep("pay")}
+              className="mt-3 w-full rounded-full border border-[#e6d5ba] bg-transparent px-5 py-3 text-sm font-bold text-[#7b6851]"
+            >
+              {lang === "ur"
+                ? "دستی ادائیگی (24-48 گھنٹے جائزہ)"
+                : "Pay manually instead (24–48h review)"}
             </button>
           </>
         )}

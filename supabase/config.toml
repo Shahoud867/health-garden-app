@@ -104,5 +104,14 @@ inspector_port = 8083
 [functions.health]
 verify_jwt = false
 
+# JazzCash's own hosted-checkout page redirects the customer's browser here
+# with a POST — it has no Supabase session to present, so the platform
+# gateway must not reject it before the function boots. Trust instead comes
+# entirely from `pp_SecureHash`, verified inside the handler (ADR-0028,
+# `_shared/payments/jazzcash.ts`) — this is the same trade every payment
+# gateway's webhook makes (a shared secret standing in for a session).
+[functions.payments-jazzcash-webhook]
+verify_jwt = false
+
 [analytics]
 enabled = false                   # Sentry + PostHog own observability (ADR-013)
