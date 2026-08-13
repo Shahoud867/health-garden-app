@@ -88,12 +88,18 @@ describe('payment_gateway_transactions RLS', () => {
       status: 'initiated',
     });
 
+    // Not `expect(error).not.toBeNull()` -- unlike INSERT (whose WITH CHECK
+    // rejects the new row outright, a real error), UPDATE with no matching
+    // policy behaves like SELECT: the USING clause filters the target rows
+    // to none, so the statement itself succeeds and just affects zero rows,
+    // no error raised. The real assertion is the one below: the row is
+    // provably unchanged.
     const { error } = await userA.client
       .from('payment_gateway_transactions')
       .update({ status: 'completed' })
       .eq('user_id', userA.userId);
 
-    expect(error).not.toBeNull();
+    expect(error).toBeNull();
 
     const { data } = await serviceRoleClient
       .from('payment_gateway_transactions')
