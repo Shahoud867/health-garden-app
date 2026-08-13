@@ -1,3 +1,4 @@
+import { useState } from "react"
 import type { NavProps, AppState } from "../types"
 import { CYCLE_LENGTH } from "../types"
 import PlantImage from "../components/PlantImage"
@@ -60,8 +61,12 @@ export default function HomeScreen({ navigate, lang, state, userId }: Props) {
     user.name?.trim().split(/\s+/)[0] || (lang === "ur" ? "دوست" : "there")
   const habitsMet = garden.filter((plant) => plant.metToday).length
   const streak = Math.min(7, Math.max(2, habitsMet + 1))
-  const waterGoal = 8
+  // Personalized from body weight at onboarding -- see WaterScreen's
+  // identical comment for the formula. No longer the same flat number
+  // every user saw regardless of who they are.
+  const waterGoal = user.waterTarget
   const activeGoal = 30
+  const [showWhyTargets, setShowWhyTargets] = useState(false)
   const weeklyProgress = Math.round((habitsMet / 5) * 100)
   const hasLoggedToday =
     today.caloriesLogged > 0 ||
@@ -161,6 +166,20 @@ export default function HomeScreen({ navigate, lang, state, userId }: Props) {
             icon={<LeafIcon className="h-5 w-5" />}
           />
         </div>
+
+        <button
+          onClick={() => setShowWhyTargets((v) => !v)}
+          className="mt-2 text-[11px] font-bold text-[#8b6f46] underline decoration-dotted underline-offset-2"
+        >
+          {lang === "ur" ? "یہ اہداف کیوں؟" : "Why these numbers?"}
+        </button>
+        {showWhyTargets && (
+          <p className="mt-1.5 text-[11.5px] leading-[1.55] text-[#6e5d4a]">
+            {lang === "ur"
+              ? "یہ اہداف آپ کے اپنے وزن، سرگرمی، اور مقصد سے شمار کیے گئے ہیں — ہر کسی کے لیے ایک جیسے نہیں۔ یہ تخمینے ہیں، طبی نسخہ نہیں۔"
+              : `These targets are calculated from your own profile — ${user.weightKg}kg, your activity level, and your goal — not the same numbers everyone sees. Standard formulas, not a medical prescription.`}
+          </p>
+        )}
 
         <div className="mt-4 flex items-center justify-between border-t border-[#eadcc7] pt-3.5">
           <div>

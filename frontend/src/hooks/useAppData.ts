@@ -44,6 +44,7 @@ const EMPTY_STATE_DEFAULTS: Omit<AppState, "lang" | "isLoggedIn" | "onboardingCo
       conditions: [],
       calorieTarget: 2000,
       proteinTarget: 100,
+      waterTarget: 8,
     },
     today: {
       caloriesLogged: 0,
@@ -82,6 +83,12 @@ function profileToUser(profile: UserRow): AppState["user"] {
       : [],
     calorieTarget: profile.daily_calorie_target ?? 2000,
     proteinTarget: profile.daily_protein_target_g ?? 100,
+    // Matches the DB's own fallback (migration 0005's hydration-check
+    // trigger: COALESCE(daily_water_target_glasses, 8)) -- a user who never
+    // gets a personalized value computed for them (pre-existing accounts,
+    // or onboarding never setting it) sees the exact same number the
+    // server itself already treats as their target.
+    waterTarget: profile.daily_water_target_glasses ?? 8,
   }
 }
 

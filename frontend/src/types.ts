@@ -69,6 +69,7 @@ export interface AppState {
     conditions: string[]
     calorieTarget: number
     proteinTarget: number
+    waterTarget: number
   }
   today: {
     caloriesLogged: number

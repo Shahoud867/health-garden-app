@@ -157,6 +157,7 @@ function AppShell() {
         conditions: user.conditions.join(","),
         daily_calorie_target: user.calorieTarget,
         daily_protein_target_g: user.proteinTarget,
+        daily_water_target_glasses: user.waterTarget,
       })
       await refetch()
       navigate("home")

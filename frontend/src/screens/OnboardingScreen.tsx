@@ -105,6 +105,20 @@ export default function OnboardingScreen({
 
   const proteinTarget = Math.round((parseFloat(form.weightKg) || 65) * 1.6)
 
+  // ~33ml per kg bodyweight is a standard public-health heuristic (the
+  // same ballpark the "8 glasses a day" rule of thumb was always a rough
+  // stand-in for) -- a modest bump for "active" reflects real extra fluid
+  // loss from exercise, not invented precision. Clamped to [1, 30], the
+  // same range users.daily_water_target_glasses' own CHECK constraint
+  // enforces server-side (migration 0003).
+  const waterTarget = (() => {
+    const w = parseFloat(form.weightKg) || 65
+    const baseMl = w * 33
+    const activityBonusMl = form.activityLevel === "active" ? 500 : 0
+    const glasses = Math.round((baseMl + activityBonusMl) / 250)
+    return Math.min(30, Math.max(1, glasses))
+  })()
+
   const next = () => {
     const idx = STEPS.indexOf(step)
     track("onboarding_step_completed", { step, step_index: idx })
@@ -132,6 +146,7 @@ export default function OnboardingScreen({
       ),
       calorieTarget,
       proteinTarget,
+      waterTarget,
     })
   }
 

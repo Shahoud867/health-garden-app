@@ -26,7 +26,6 @@ interface Props extends NavProps {
   refetch: () => Promise<void>
 }
 
-const GOAL = 8
 const WEEK_DAY_LABELS_EN = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 const WEEK_DAY_LABELS_UR = [
   "پیر",
@@ -48,6 +47,11 @@ export default function WaterScreen({
 }: Props) {
   const { showToast } = useToast()
   const glasses = state.today.waterGlasses
+  // Personalized at onboarding from body weight (~33ml/kg, a standard
+  // public-health heuristic -- see OnboardingScreen's identical comment),
+  // not the same flat "8 glasses" every user used to see regardless of
+  // their own weight or activity level.
+  const goal = state.user.waterTarget
   const [pending, setPending] = useState(false)
   const [weekTotals, setWeekTotals] = useState<number[]>([])
 
@@ -167,9 +171,9 @@ export default function WaterScreen({
                 {glasses}
               </div>
               <div className="mt-1 text-sm font-bold text-[#6e5d4a]">
-                {lang === "ur" ? `${GOAL} میں سے` : `of ${GOAL} glasses`}
+                {lang === "ur" ? `${goal} میں سے` : `of ${goal} glasses`}
               </div>
-              {glasses >= GOAL && (
+              {glasses >= goal && (
                 <div className="mt-2 text-xs font-extrabold text-[#6c9e36]">
                   {lang === "ur" ? "ہدف پورا!" : "Goal reached!"}
                 </div>
@@ -178,7 +182,7 @@ export default function WaterScreen({
           </div>
 
           <div className="mb-6 flex flex-wrap justify-center gap-2">
-            {Array.from({ length: Math.max(GOAL, glasses) }).map((_, i) => (
+            {Array.from({ length: Math.max(goal, glasses) }).map((_, i) => (
               <span
                 key={i}
                 className="h-3 w-3 rounded-full border"
@@ -232,7 +236,7 @@ export default function WaterScreen({
                       <div
                         className="w-full rounded-full bg-[#3b8f9f]"
                         style={{
-                          height: `${Math.max((val / GOAL) * 100, val > 0 ? 12 : 2)}%`,
+                          height: `${Math.max((val / goal) * 100, val > 0 ? 12 : 2)}%`,
                         }}
                       />
                     </div>
